@@ -16,7 +16,7 @@
     "app:build:win": "npm run build && npm run mcp:bundle && electron-builder --win --publish never",
     "mcp:install": "npm --prefix mcp install --no-audit --no-fund",
     "mcp:bundle": "npm run mcp:install && rolldown mcp/server.mjs --platform node --format esm --file mcp/bundle/server.mjs",
-    "app:release": "npm run build && npm run mcp:bundle && electron-builder --mac --win --publish always"
+    "app:release": "npm run build && npm run mcp:bundle && electron-builder --mac --publish always && electron-builder --win --publish always"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
