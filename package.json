@@ -11,12 +11,14 @@
     "postinstall": "node -e \"require('fs').copyFileSync('node_modules/openchemlib/dist/resources.json','public/ocl-resources.json')\"",
     "app": "node electron/dev.mjs",
     "app:start": "npm run build && electron .",
-    "app:build": "npm run build && npm run mcp:bundle && electron-builder --mac --publish never",
+    "app:build": "npm run build && npm run mcp:bundle && electron-builder --mac --publish never && npm run app:check",
     "icons": "electron electron/make-icons.mjs",
-    "app:build:win": "npm run build && npm run mcp:bundle && electron-builder --win --publish never",
+    "app:build:win": "npm run build && npm run mcp:bundle && electron-builder --win --publish never && npm run app:check:win",
     "mcp:install": "npm --prefix mcp install --no-audit --no-fund",
     "mcp:bundle": "npm run mcp:install && rolldown mcp/server.mjs --platform node --format esm --file mcp/bundle/server.mjs",
-    "app:release": "npm run build && npm run mcp:bundle && electron-builder --mac --publish always && electron-builder --win --publish always"
+    "app:release": "npm run app:build && npm run app:build:win && electron-builder --mac --publish always && electron-builder --win --publish always",
+    "app:check": "node electron/check-package.mjs release/mac-arm64/OpenMol.app",
+    "app:check:win": "node electron/check-package.mjs release/win-unpacked"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
@@ -46,10 +48,10 @@
     },
     "files": [
       "dist/**",
-      "electron/main.mjs",
-      "electron/menu.mjs",
-      "electron/store.mjs",
-      "electron/preload.cjs",
+      "electron/**",
+      "!electron/dev.mjs",
+      "!electron/make-icons.mjs",
+      "!electron/check-package.mjs",
       "package.json"
     ],
     "mac": {

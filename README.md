@@ -26,8 +26,10 @@ Windows: siehe [WINDOWS.md](WINDOWS.md) (Installer vorbereitet, auf Windows noch
   Menü „Nach Updates suchen …“ bzw. Einstellungen → „Jetzt nach Updates suchen“.
 - **Neue Version veröffentlichen:**
   1. In `package.json` die `version` erhöhen (z. B. 1.2.0 → 1.3.0) – nur höhere Nummern gelten als Update.
-  2. `GH_TOKEN=$(gh auth token) npm run app:release` – baut Mac- und Windows-Installer und lädt sie samt
-     `latest.yml`/`latest-mac.yml` als **Entwurf** in das Release `v<Version>` auf GitHub.
+  2. `GH_TOKEN=$(gh auth token) npm run app:release` – baut Mac- und Windows-Installer, **prüft beide**
+     (`electron/check-package.mjs`: alle Dateien des Hauptprozesses, Oberfläche, KI-Server, Update-Info im Paket) und
+     lädt sie erst dann samt `latest.yml`/`latest-mac.yml` als **Entwurf** in das Release `v<Version>` auf GitHub.
+     Vorher die fertige Mac-App einmal selbst starten (`release/mac-arm64/OpenMol.app`).
   3. Auf GitHub beim Entwurf die Notizen („Neuerungen“ – erscheinen in der Update-Meldung) ergänzen und
      **„Publish release“** drücken. Erst dann sehen die Apps das Update.
 - **Dateien:** Öffnen (⌘O), Speichern (⌘S – beim ersten Mal mit Dialog, danach direkt in dieselbe Datei),
