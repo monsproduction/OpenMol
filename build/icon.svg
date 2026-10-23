@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- OpenMol-App-Icon: Vektor-Nachzeichnung von Icon/Icon.png auf dem macOS-Raster (824 px Fläche auf 1024 px) -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5ca6fa" />
+      <stop offset="0.5" stop-color="#2f6be3" />
+      <stop offset="1" stop-color="#153a9f" />
+    </linearGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16" />
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="12" stdDeviation="14" flood-color="#0b1f55" flood-opacity="0.32" />
+    </filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bg)" filter="url(#shadow)" />
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#shine)" />
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-linejoin="round">
+    <!-- offenes Sechseck (Spitze oben), Lücke rechts oben für den Stern -->
+    <path d="M730 448 L730 662 L499 795 L268 662 L268 395 L499 261 L575 305" stroke-width="38" />
+    <!-- Bindungen des Moleküls -->
+    <path d="M499 383 L499 531 M499 531 L371 604 M499 531 L627 604" stroke-width="20" />
+  </g>
+  <g fill="#ffffff">
+    <circle cx="499" cy="383" r="31" />
+    <circle cx="499" cy="531" r="43" />
+    <circle cx="371" cy="604" r="39" />
+    <circle cx="627" cy="604" r="39" />
+    <!-- Funkeln (vierzackiger Stern) -->
+    <path d="M724 252 C731 301 751 319 802 326 C751 333 731 351 724 400 C717 351 697 333 646 326 C697 319 717 301 724 252 Z" stroke="#ffffff" stroke-width="14" stroke-linejoin="round" />
+  </g>
+</svg>

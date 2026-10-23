@@ -1,0 +1,16 @@
+{
+  "name": "openmol-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MCP-Server: OpenMol (Browser-App) mit jeder MCP-fähigen KI-Anwendung steuern",
+  "scripts": {
+    "start": "node server.mjs",
+    "start:http": "node server.mjs --http"
+  },
+  "type": "module",
+  "main": "server.mjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "zod": "^4.6.7"
+  }
+}

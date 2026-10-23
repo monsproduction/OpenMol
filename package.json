@@ -1,0 +1,125 @@
+{
+  "name": "openmol",
+  "private": true,
+  "version": "1.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "postinstall": "node -e \"require('fs').copyFileSync('node_modules/openchemlib/dist/resources.json','public/ocl-resources.json')\"",
+    "app": "node electron/dev.mjs",
+    "app:start": "npm run build && electron .",
+    "app:build": "npm run build && npm run mcp:bundle && electron-builder --mac",
+    "icons": "electron electron/make-icons.mjs",
+    "app:build:win": "npm run build && npm run mcp:bundle && electron-builder --win",
+    "mcp:install": "npm --prefix mcp install --no-audit --no-fund",
+    "mcp:bundle": "npm run mcp:install && rolldown mcp/server.mjs --platform node --format esm --file mcp/bundle/server.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "44.9.3",
+    "electron-builder": "26.15.3",
+    "immer": "^11.1.21",
+    "openchemlib": "^9.25.1",
+    "oxlint": "^1.81.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  },
+  "productName": "OpenMol",
+  "description": "OpenMol – chemische Strukturen, Reaktionen und Mechanismen zeichnen",
+  "main": "electron/main.mjs",
+  "build": {
+    "appId": "de.openmol.app",
+    "productName": "OpenMol",
+    "copyright": "OpenMol",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "electron/main.mjs",
+      "electron/menu.mjs",
+      "electron/store.mjs",
+      "electron/preload.cjs",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.education",
+      "icon": "build/icon.icns",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64"
+          ]
+        }
+      ],
+      "identity": "-",
+      "hardenedRuntime": false,
+      "darkModeSupport": true,
+      "extendInfo": {
+        "NSHumanReadableCopyright": "OpenMol"
+      },
+      "fileAssociations": [
+        {
+          "ext": "openmol",
+          "name": "OpenMol-Dokument",
+          "role": "Editor"
+        },
+        {
+          "ext": "cdxml",
+          "name": "ChemDraw-Dokument (CDXML)",
+          "role": "Viewer",
+          "rank": "Alternate"
+        }
+      ]
+    },
+    "dmg": {
+      "title": "OpenMol ${version}"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "OpenMol"
+    },
+    "fileAssociations": [
+      {
+        "ext": "openmol",
+        "name": "OpenMol-Dokument",
+        "role": "Editor"
+      }
+    ],
+    "extraResources": [
+      {
+        "from": "mcp/bundle",
+        "to": "mcp",
+        "filter": [
+          "server.mjs"
+        ]
+      }
+    ]
+  },
+  "author": "OpenMol"
+}
