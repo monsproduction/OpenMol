@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('openmol', {
   setUiLang: (l) => ipcRenderer.send('openmol:ui-lang', l),
   showSettingsDir: () => ipcRenderer.send('openmol:show-settings-dir'),
   mcpInfo: () => ipcRenderer.sendSync('openmol:mcp-info'),
+  appVersion: () => ipcRenderer.sendSync('openmol:app-version'),
+  checkUpdates: () => ipcRenderer.send('openmol:update-check'),
   onMenu: on('openmol:menu'),
   onOpenPath: on('openmol:open-path'),
   onCloseRequest: on('openmol:close-request'),

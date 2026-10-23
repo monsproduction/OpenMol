@@ -576,6 +576,25 @@ function SettingsDialog() {
             : 'Aus: Die App nimmt keine Befehle von außen an.'}
         </p>
         {mcp?.available && <McpSetup info={mcp} />}
+        {desktop && (
+          <>
+            <label className="field-label">{`Updates (installierte Version ${desktop.appVersion()})`}</label>
+            <div className="seg">
+              <button className={s.autoUpdate ? 'active' : ''} onClick={() => setSettings({ autoUpdate: true })}>
+                Automatisch suchen
+              </button>
+              <button className={!s.autoUpdate ? 'active' : ''} onClick={() => setSettings({ autoUpdate: false })}>
+                Nur von Hand
+              </button>
+            </div>
+            <p className="muted small">
+              Automatisch: Beim Start (höchstens einmal am Tag) wird bei GitHub nach einer neuen Version gefragt; installiert wird nur nach Rückfrage.{' '}
+              <button className="link-btn" onClick={() => desktop?.checkUpdates()}>
+                Jetzt nach Updates suchen
+              </button>
+            </p>
+          </>
+        )}
       </div>
       <footer>
         <button className="btn primary" onClick={close}>

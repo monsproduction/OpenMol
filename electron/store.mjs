@@ -69,6 +69,17 @@ function readable(text) {
 }
 const asText = (v) => (typeof v === 'string' ? v : JSON.stringify(v))
 
+/** Wert aus den gespeicherten Einstellungen lesen (für den Hauptprozess, z. B. „automatisch nach Updates suchen“) */
+export function readStored(key) {
+  const v = load(fileFor(key))[key]
+  if (typeof v !== 'string') return v
+  try {
+    return JSON.parse(v)
+  } catch {
+    return v
+  }
+}
+
 export function initStore(ipcMain) {
   ipcMain.on('openmol:store-all', (e) => {
     const all = {}

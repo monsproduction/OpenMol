@@ -58,6 +58,7 @@ const L = {
     help: 'Hilfe',
     shortcuts: 'Tastenkürzel',
     settingsDir: 'Einstellungsordner zeigen',
+    updates: 'Nach Updates suchen …',
   },
   en: {
     about: 'About OpenMol',
@@ -113,6 +114,7 @@ const L = {
     help: 'Help',
     shortcuts: 'Keyboard Shortcuts',
     settingsDir: 'Show Settings Folder',
+    updates: 'Check for Updates …',
   },
 }
 
@@ -120,9 +122,10 @@ let lang = 'de'
 export function setMenuLang(l) {
   lang = l === 'en' ? 'en' : 'de'
 }
+export const menuLang = () => lang
 
 /** @param {() => Electron.BrowserWindow | null} getWin */
-export function buildMenu(getWin) {
+export function buildMenu(getWin, actions = {}) {
   const t = L[lang]
   const mac = process.platform === 'darwin'
   const send = (cmd) => () => getWin()?.webContents.send('openmol:menu', cmd)
@@ -136,6 +139,7 @@ export function buildMenu(getWin) {
             label: app.name,
             submenu: [
               { role: 'about', label: t.about },
+              { label: t.updates, click: () => actions.checkUpdates?.() },
               { type: 'separator' },
               item(t.settings, 'settings', 'CmdOrCtrl+,'),
               { type: 'separator' },
@@ -221,7 +225,11 @@ export function buildMenu(getWin) {
     {
       role: 'help',
       label: t.help,
-      submenu: [item(t.shortcuts, 'help'), item(t.settingsDir, 'settingsDir'), ...(mac ? [] : [{ type: 'separator' }, { role: 'about', label: t.about }])],
+      submenu: [
+        item(t.shortcuts, 'help'),
+        item(t.settingsDir, 'settingsDir'),
+        ...(mac ? [] : [{ type: 'separator' }, { label: t.updates, click: () => actions.checkUpdates?.() }, { role: 'about', label: t.about }]),
+      ],
     },
   ]
   return Menu.buildFromTemplate(tpl)

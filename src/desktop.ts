@@ -37,6 +37,9 @@ export interface DesktopApi {
   showSettingsDir: () => void
   /** mitgelieferter MCP-Server: Programm (OpenMol selbst), Server-Datei und Umgebung */
   mcpInfo: () => McpInfo
+  appVersion: () => string
+  /** „Jetzt nach Updates suchen“ (Ergebnis zeigt der Hauptprozess als Dialog) */
+  checkUpdates: () => void
   onMenu: (cb: (cmd: string) => void) => () => void
   onOpenPath: (cb: (p: string) => void) => () => void
   onCloseRequest: (cb: (o: { quitting: boolean }) => void) => () => void

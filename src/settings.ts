@@ -13,10 +13,12 @@ export interface AppSettings {
   uiLang: 'de' | 'en'
   /** Ansatztabelle: CAS-Nummern und GHS-Symbole automatisch in PubChem nachschlagen (Produkte nie automatisch) */
   autoPubchem: boolean
+  /** Desktop-App: beim Start (höchstens einmal am Tag) bei GitHub nach einer neuen Version fragen */
+  autoUpdate: boolean
 }
 
 const KEY = 'openmol:settings'
-const DEFAULTS: AppSettings = { decimal: ',', tableLang: 'de', aiControl: false, uiLang: 'de', autoPubchem: true }
+const DEFAULTS: AppSettings = { decimal: ',', tableLang: 'de', aiControl: false, uiLang: 'de', autoPubchem: true, autoUpdate: true }
 
 function load(): AppSettings {
   try {
@@ -29,6 +31,7 @@ function load(): AppSettings {
         aiControl: v.aiControl === true,
         uiLang: v.uiLang === 'en' ? 'en' : 'de',
         autoPubchem: v.autoPubchem !== false,
+        autoUpdate: v.autoUpdate !== false,
       }
     }
   } catch {

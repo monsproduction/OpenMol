@@ -19,6 +19,17 @@ Windows: siehe [WINDOWS.md](WINDOWS.md) (Installer vorbereitet, auf Windows noch
 - **Entwickeln:** `npm run app` startet die Desktop-App mit Live-Neuladen (Vite + Electron).
 - **Bauen:** `npm run app:build` → `release/OpenMol-<Version>-arm64.dmg` (Apple Silicon). Icon neu erzeugen nach
   Änderungen an `build/icon.svg`: `npm run icons`.
+- **Updates:** Die App fragt beim Start (höchstens einmal am Tag, abschaltbar in den Einstellungen) bei den
+  GitHub-Releases nach einer neuen Version und zeigt die Neuerungen. Windows: herunterladen und installieren per Klick
+  (electron-updater). Mac: Die neue DMG wird nach „Downloads“ geladen, geprüft und geöffnet – OpenMol dann in
+  „Programme“ ziehen („Ersetzen“). Vollautomatisch ginge es auf dem Mac nur mit Apple-Entwicklerzertifikat.
+  Menü „Nach Updates suchen …“ bzw. Einstellungen → „Jetzt nach Updates suchen“.
+- **Neue Version veröffentlichen:**
+  1. In `package.json` die `version` erhöhen (z. B. 1.2.0 → 1.3.0) – nur höhere Nummern gelten als Update.
+  2. `GH_TOKEN=$(gh auth token) npm run app:release` – baut Mac- und Windows-Installer und lädt sie samt
+     `latest.yml`/`latest-mac.yml` als **Entwurf** in das Release `v<Version>` auf GitHub.
+  3. Auf GitHub beim Entwurf die Notizen („Neuerungen“ – erscheinen in der Update-Meldung) ergänzen und
+     **„Publish release“** drücken. Erst dann sehen die Apps das Update.
 - **Dateien:** Öffnen (⌘O), Speichern (⌘S – beim ersten Mal mit Dialog, danach direkt in dieselbe Datei),
   Speichern unter (⇧⌘S), Exportieren (⌘E bzw. Menü Ablage ▸ Exportieren: PNG, SVG, Molfile, CDXML) – jeweils mit den
   Dialogen des Systems. Dokumente heißen `.openmol` (ältere `.chemdoc.json` öffnen weiterhin); Doppelklick im Finder,

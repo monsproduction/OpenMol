@@ -907,9 +907,14 @@ export const EN: Record<string, string> = {
   'Prompt': 'Prompt',
   'Konfiguration': 'Configuration',
   'Befehl': 'Command',
+  'Automatisch suchen': 'Check automatically',
+  'Nur von Hand': 'Manually only',
+  'Jetzt nach Updates suchen': 'Check for updates now',
+  'Automatisch: Beim Start (höchstens einmal am Tag) wird bei GitHub nach einer neuen Version gefragt; installiert wird nur nach Rückfrage.': 'Automatically: at startup (at most once a day) GitHub is asked for a new version; nothing is installed without asking.',
 }
 
 export const EN_PATTERNS: Record<string, string> = {
+  'Updates (installierte Version {0})': 'Updates (installed version {0})',
   'Dieses Dateiformat kann OpenMol nicht öffnen: {0}': 'OpenMol cannot open this file format: {0}',
   'Ungültige CAS-Nummer {0}: Die Prüfziffer passt nicht – bitte die Nummer prüfen.': 'Invalid CAS number {0}: the check digit does not match – please check the number.',
   'Keine Verbindung mit der CAS-Nummer {0} in PubChem gefunden.': 'No compound with CAS number {0} found in PubChem.',

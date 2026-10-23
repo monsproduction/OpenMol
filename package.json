@@ -1,7 +1,7 @@
 {
   "name": "openmol",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,11 +11,12 @@
     "postinstall": "node -e \"require('fs').copyFileSync('node_modules/openchemlib/dist/resources.json','public/ocl-resources.json')\"",
     "app": "node electron/dev.mjs",
     "app:start": "npm run build && electron .",
-    "app:build": "npm run build && npm run mcp:bundle && electron-builder --mac",
+    "app:build": "npm run build && npm run mcp:bundle && electron-builder --mac --publish never",
     "icons": "electron electron/make-icons.mjs",
-    "app:build:win": "npm run build && npm run mcp:bundle && electron-builder --win",
+    "app:build:win": "npm run build && npm run mcp:bundle && electron-builder --win --publish never",
     "mcp:install": "npm --prefix mcp install --no-audit --no-fund",
-    "mcp:bundle": "npm run mcp:install && rolldown mcp/server.mjs --platform node --format esm --file mcp/bundle/server.mjs"
+    "mcp:bundle": "npm run mcp:install && rolldown mcp/server.mjs --platform node --format esm --file mcp/bundle/server.mjs",
+    "app:release": "npm run build && npm run mcp:bundle && electron-builder --mac --win --publish always"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
@@ -119,7 +120,18 @@
           "server.mjs"
         ]
       }
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "monsproduction",
+        "repo": "OpenMol",
+        "releaseType": "draft"
+      }
     ]
   },
-  "author": "OpenMol"
+  "author": "OpenMol",
+  "dependencies": {
+    "electron-updater": "6.8.9"
+  }
 }

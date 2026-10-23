@@ -9,6 +9,7 @@ import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { buildMenu, setMenuLang } from './menu.mjs'
 import { initStore } from './store.mjs'
+import { checkForUpdates, scheduleAutoCheck } from './updater.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
@@ -164,6 +165,9 @@ function serveApp() {
   })
 }
 
+/** Menüpunkte, die der Hauptprozess selbst ausführt */
+const menuActions = { checkUpdates: () => void checkForUpdates(() => win, { manual: true }) }
+
 // ---------- Brücke zur Oberfläche ----------
 
 const FILTERS = {
@@ -273,7 +277,7 @@ function registerIpc() {
   // Sprache der Oberfläche → Menüleiste neu aufbauen
   ipcMain.on('openmol:ui-lang', (_e, l) => {
     setMenuLang(l)
-    Menu.setApplicationMenu(buildMenu(() => win))
+    Menu.setApplicationMenu(buildMenu(() => win, menuActions))
   })
 
   // KI-Steuerung: der mitgelieferte MCP-Server; OpenMol selbst führt ihn aus (ELECTRON_RUN_AS_NODE=1 → wie Node.js),
@@ -282,6 +286,12 @@ function registerIpc() {
     const server = app.isPackaged ? path.join(process.resourcesPath, 'mcp', 'server.mjs') : path.join(here, '..', 'mcp', 'server.mjs')
     e.returnValue = { command: process.execPath, server, env: { ELECTRON_RUN_AS_NODE: '1' }, available: fs.existsSync(server) }
   })
+
+  // Updates: Version anzeigen, „Jetzt nach Updates suchen“
+  ipcMain.on('openmol:app-version', (e) => {
+    e.returnValue = app.getVersion()
+  })
+  ipcMain.on('openmol:update-check', () => void checkForUpdates(() => win, { manual: true }))
 
   ipcMain.on('openmol:show-settings-dir', () => {
     void shell.openPath(app.getPath('userData'))
@@ -330,10 +340,11 @@ app.whenReady().then(() => {
   initStore(ipcMain)
   serveApp()
   registerIpc()
-  Menu.setApplicationMenu(buildMenu(() => win))
+  Menu.setApplicationMenu(buildMenu(() => win, menuActions))
   // Windows/Linux: Datei als Startargument
   for (const a of process.argv.slice(1)) if (!a.startsWith('-') && fs.existsSync(a) && isDocFile(a)) sendOpen(a)
   createWindow()
+  scheduleAutoCheck(() => win)
   app.on('activate', () => {
     if (!BrowserWindow.getAllWindows().length) createWindow()
   })
