@@ -17,7 +17,7 @@
     "mcp:install": "npm --prefix mcp install --no-audit --no-fund",
     "mcp:bundle": "npm run mcp:install && rolldown mcp/server.mjs --platform node --format esm --file mcp/bundle/server.mjs",
     "app:release": "npm run app:build && npm run app:build:win && npm run release:draft && electron-builder --mac --publish always && electron-builder --win --publish always",
-    "release:draft": "gh release view v$npm_package_version >/dev/null 2>&1 || gh release create v$npm_package_version --draft --target main --title \"OpenMol $npm_package_version\" --notes \"\"",
+    "release:draft": "node electron/release-draft.mjs",
     "app:check": "node electron/check-package.mjs release/mac-arm64/OpenMol.app",
     "app:check:win": "node electron/check-package.mjs release/win-unpacked"
   },
@@ -53,6 +53,7 @@
       "!electron/dev.mjs",
       "!electron/make-icons.mjs",
       "!electron/check-package.mjs",
+      "!electron/release-draft.mjs",
       "package.json"
     ],
     "mac": {
