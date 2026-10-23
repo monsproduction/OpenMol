@@ -455,18 +455,41 @@ export function RichField({
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const focused = useRef(false)
+  // zuletzt getippter Inhalt, der noch nicht übernommen ist (für Klick außerhalb und Verschwinden des Feldes)
+  const pending = useRef<string | null>(null)
+  const latest = useRef({ value, onCommit })
+  latest.current = { value, onCommit }
   useEffect(() => {
     if (ref.current && !focused.current) ref.current.innerHTML = richToEditorHtml(value)
   }, [value])
+  useEffect(() => {
+    // Klick außerhalb (z. B. in die Zeichenfläche) übernimmt sofort – dort wechselt der Fokus nicht immer
+    const outside = (e: PointerEvent) => {
+      const box = ref.current?.closest('.rich-field')
+      if (pending.current !== null && box && !box.contains(e.target as Node)) flush()
+    }
+    document.addEventListener('pointerdown', outside, true)
+    return () => {
+      document.removeEventListener('pointerdown', outside, true)
+      // Feld verschwindet (Auswahl gewechselt) mit noch nicht übernommenem Text → für das bisherige Objekt übernehmen
+      flush()
+    }
+  }, [])
   useEffect(() => {
     if (!focusEvent) return
     const f = () => ref.current?.focus()
     window.addEventListener(focusEvent, f)
     return () => window.removeEventListener(focusEvent, f)
   }, [focusEvent])
+  const flush = () => {
+    if (pending.current === null) return
+    const v = sanitizeRich(pending.current)
+    pending.current = null
+    if (v !== latest.current.value) latest.current.onCommit(v)
+  }
   const commit = () => {
-    const v = sanitizeRich(ref.current?.innerHTML ?? '')
-    if (v !== value) onCommit(v)
+    if (ref.current) pending.current = ref.current.innerHTML
+    flush()
   }
   return (
     <div className="rich-field">
@@ -481,6 +504,7 @@ export function RichField({
         // Formatierungsknöpfe (Fett, Summenformel …) melden sich mit einem künstlichen input-Ereignis → sofort
         // übernehmen, damit die Zeichnung gleich reagiert; Tippen wird weiterhin erst beim Verlassen übernommen
         onInput={(e) => {
+          pending.current = (e.currentTarget as HTMLDivElement).innerHTML
           if (!e.nativeEvent.isTrusted) commit()
         }}
         onBlur={() => {

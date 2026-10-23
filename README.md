@@ -64,6 +64,16 @@ Windows: siehe [WINDOWS.md](WINDOWS.md) (Installer vorbereitet, auf Windows noch
 - Zickzack-Ketten mit Bindungszähler, Ringe (3–8, Benzol) frei, an Atomen (spiro) und an Bindungen (ankondensiert)
 - Atome per Tastatur: Maus über Atom halten (oder Atome markieren) und `N`, `O`, `S`, `l` (Cl), `b` (Br) … tippen;
   `C` auf einem C-Atom blendet nur dessen Beschriftung ein (z. B. CH₂) bzw. wieder aus – andere C-Atome bleiben unsichtbar
+- ChemDraw-Hotkeys (wie im „Hotkey Cheat Sheet“): über Atom/Bindung z. B. `o` OH, `O` OMe, `y` Boc, `1` Bindung, `2`
+  Carbonyl, `9` Verzweigung/gem-Dimethyl, `a` Benzol, `7` Cyclopentan, über Bindungen `a z v 4–8 9 0` für Ringe; ein
+  grüner Hotspot merkt sich die Stelle, Pfeiltasten wandern weiter (`1B79←←←←o↓↓↓↓o→→9` = Pinakolboronat), Enter macht
+  die Auswahl zum Hotspot, Leertaste/Tab das Molekül zur Auswahl; ⌘+Pfeil Reaktions-Kürzel, ⌥+Pfeil drehen (15°/1°),
+  ⇧⌥+Pfeil 3D-Drehung
+- Tabs: mehrere Dokumente gleichzeitig (⌘N/⌘T neu, ⌘W schließen, Strg+Tab wechseln), jedes mit eigenem Verlauf;
+  beim Beenden eine gemeinsame Liste aller ungesicherten Dokumente
+- Seitenformate im Dokument-Stil (A0–A6, US Letter/Legal, PowerPoint 16:9/4:3, Poster) im ChemDraw-Maßstab
+  (Bindung = 14,4 pt), „+“ an den Rändern baut Seiten an; PDF-Export mit einer Seite je Blatt; eigene
+  Hintergrundfarbe; der Stil wird in der Datei gespeichert
 - Beschriftungen und Abkürzungen (`OMe`, `CO2H`, `Ph`, `NHBoc`, `OTBS`, `R` …), automatisch gespiegelt (MeO–);
   kondensierte Formeln (`CH2OH`, `iPr2N`, `N(iPr)2`, `CMe2OH`) werden erkannt und je nach Bindungsseite gespiegelt
   (`HOH2C–`, `–NiPr2`); Summenformel versteht auch Ladungen (`NH3+`, `CO2−` → ⁻O2C–), Oxo-Gruppen (`SO2NH2`,
@@ -218,5 +228,5 @@ React + TypeScript + Vite. Chemische Berechnungen (SMILES, Molfile, Formeln, Eig
 ## Noch nicht enthalten (Ideen für später)
 
 NMR-Vorhersage, IUPAC-Namensgenerierung offline, Stöchiometrie-Tabelle, Newman-/Fischer-Projektionen,
-3D-Ansicht, mehrseitige Dokumente, Import des binären ChemDraw-Formats (`.cdx`); im CDXML-Export fehlen Ringfüllungen und
+3D-Ansicht, Import des binären ChemDraw-Formats (`.cdx`); im CDXML-Export fehlen Ringfüllungen und
 Farbverläufe, Abkürzungen wie OMe werden als Beschriftung (ohne Chemie) übergeben.

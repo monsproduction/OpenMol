@@ -1,6 +1,6 @@
 import { useSettings } from '../settings'
 import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { bestBondAngle, buildGraph, textWidth } from '../model/chem'
+import { bestBondAngle, buildGraph, textWidth, type Graph } from '../model/chem'
 import { SYMBOL_SET } from '../model/elements'
 import { canonicalAbbrev } from '../model/abbrev'
 import {
@@ -30,7 +30,10 @@ import {
   mergeOverlaps,
   pasteClip,
   planRing,
+  planShapedRing,
   placeRing,
+  ringShape,
+  type RingKind,
   rotateSelection,
   selectionAtomIds,
   sproutBond,
@@ -56,9 +59,10 @@ import { ATTACH } from '../ui/Toolbar'
 import { TEMPLATE_GROUPS } from '../model/templates'
 import { applyRingFill, perceiveRings, removeRingFill, ringAt, ringSystem } from '../model/rings'
 import { rememberFill } from '../ui/recentFills'
-import type { Anchor, Atom, Bond, BondType, Cycle, CycleArcLabel, Doc, DoublePos, Id, Selection, TextObj } from '../model/types'
+import type { Anchor, Atom, Bond, BondType, Cycle, CycleArcLabel, Doc, DoublePos, Id, PageLayout, Selection, TextObj } from '../model/types'
+import { pageDims, sheetBox } from '../model/pages'
 import { emptySelection, selectionSize, uid } from '../model/types'
-import { NEED_3D_SELECTION, completeSel, insertFragmentAt, insertUserTemplateAt } from '../tools/actions'
+import { NEED_3D_SELECTION, addPage, completeSel, insertFragmentAt, insertUserTemplateAt } from '../tools/actions'
 import { findUserTemplate } from '../model/userlib'
 import {
   beginTx,
@@ -72,6 +76,7 @@ import {
   toast,
   useStore,
   type Hover,
+  type View,
 } from '../store'
 import { trackPointer } from '../tools/keyboard'
 import { arcLabelPos, attachCycle, branchFromPoint, branchGeom, branchLabelPos, cubicDist, eAngle, eDist, eNormal, ePoint, linkGeom, linkLabelPos, newArcLabel, newBranch, newBranchPair, newCycle, stationHalfGaps, stationLabelSize } from '../model/cycle'
@@ -202,6 +207,16 @@ function modifyBond(b: Bond, type: BondType) {
 
 const GROUP_NOT_ELEMENT = new Set(['Pr', 'Ac'])
 
+// Cyclopentadien: CH2 oben (Ecke 0), Doppelbindungen an den Kanten 1–2 und 3–4
+const CP_PATTERN = [false, true, false, true, false]
+
+/** Ring für das Ring-Werkzeug: regelmäßig (3–8, Benzol), Cyclopentadien oder Sessel */
+function ringPlanFor(doc: Doc, g: Graph, o: { ringKind: RingKind; ringSize: number }, target: Parameters<typeof planRing>[3], cursor?: Pt) {
+  const shape = ringShape(o.ringKind)
+  if (shape) return planShapedRing(doc, g, shape, target, cursor)
+  return planRing(doc, g, o.ringKind === 'cp' ? 5 : o.ringSize, target, cursor)
+}
+
 export function applyAtomText(d: Doc, id: Id, raw: string) {
   const a = d.atoms[id]
   if (!a) return
@@ -299,6 +314,7 @@ export function Canvas() {
   const opts = useStore((s) => s.opts)
   const view = useStore((s) => s.view)
   const hover = useStore((s) => s.hover)
+  const hotspot = useStore((s) => s.hotspot)
   const editing = useStore((s) => s.editing)
   const scene = getScene(doc)
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -315,6 +331,7 @@ export function Canvas() {
   const L = doc.style.bondLength
   const fs = doc.style.fontSize
   const z = view.zoom
+  const page = doc.style.page
 
   // Anfangsansicht: Ursprung in die Mitte
   useEffect(() => {
@@ -368,7 +385,7 @@ export function Canvas() {
       if (e.ctrlKey || e.metaKey) {
         const sx = e.clientX - rect.left
         const sy = e.clientY - rect.top
-        const nz = Math.min(8, Math.max(0.1, v.zoom * Math.exp(-e.deltaY * 0.01)))
+        const nz = Math.min(8, Math.max(0.04, v.zoom * Math.exp(-e.deltaY * 0.01)))
         const dx = (sx - v.panX) / v.zoom
         const dy = (sy - v.panY) / v.zoom
         setState({ view: { zoom: nz, panX: sx - dx * nz, panY: sy - dy * nz } })
@@ -1266,8 +1283,8 @@ export function Canvas() {
         const target =
           h?.kind === 'atom' ? { type: 'atom' as const, id: h.id } : h?.kind === 'bond' ? { type: 'bond' as const, id: h.id } : { type: 'point' as const, p }
         commit((doc) => {
-          const plan = planRing(doc, buildGraph(doc), o.ringSize, target, p)
-          placeRing(doc, plan, o.ringAromatic && o.ringSize === 6)
+          const plan = ringPlanFor(doc, buildGraph(doc), o, target, p)
+          placeRing(doc, plan, o.ringKind === 'regular' && o.ringAromatic && o.ringSize === 6, o.ringKind === 'cp' ? CP_PATTERN : undefined)
         })
         return
       }
@@ -1669,6 +1686,22 @@ export function Canvas() {
       hiBox({ x1: Math.min(s.x1, s.x2), y1: Math.min(s.y1, s.y2), x2: Math.max(s.x1, s.x2), y2: Math.max(s.y1, s.y2) }, hoverColor, 'hs', false)
     }
   }
+  // ChemDraw-Hotspot: grüner Punkt rechts oben am Atom bzw. grünes Quadrat auf der Bindung
+  if (hotspot && !editing && !preview) {
+    const hc = '#22a447'
+    if (hotspot.kind === 'atom' && doc.atoms[hotspot.id]) {
+      const a = doc.atoms[hotspot.id]
+      hiAtom(hotspot.id, hc, 0.14, 'hsa')
+      overlay.push(<circle key="hsd" cx={a.x + fs * 0.55} cy={a.y - fs * 0.55} r={Math.max(3 / z, fs * 0.16)} fill={hc} />)
+    } else if (hotspot.kind === 'bond' && doc.bonds[hotspot.id]) {
+      const b = doc.bonds[hotspot.id]
+      const a1 = doc.atoms[b.a1]
+      const a2 = doc.atoms[b.a2]
+      const r = Math.max(3 / z, fs * 0.18)
+      hiBond(hotspot.id, hc, 0.14, 'hsb')
+      if (a1 && a2) overlay.push(<rect key="hsq" x={(a1.x + a2.x) / 2 - r} y={(a1.y + a2.y) / 2 - r} width={2 * r} height={2 * r} fill={hc} />)
+    }
+  }
   for (const [i, h] of eraseHits.entries()) {
     if (!h) continue
     if (h.kind === 'atom') hiAtom(h.id, '#e5484d', 0.3, 'e' + i)
@@ -1687,14 +1720,14 @@ export function Canvas() {
         : hover?.kind === 'bond'
           ? { type: 'bond' as const, id: hover.id }
           : { type: 'point' as const, p: cursor }
-    const plan = planRing(doc, scene.g, opts.ringSize, target, cursor)
+    const plan = ringPlanFor(doc, scene.g, opts, target, cursor)
     const segs: [Pt, Pt][] = plan.pts.map((q, i) => [q, plan.pts[(i + 1) % plan.pts.length]])
     overlay.push(
       <g key="ringprev" opacity={0.45}>
         {segs.map(([a, b], i) => (
           <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={ACCENT} strokeWidth={doc.style.lineWidth} strokeLinecap="round" />
         ))}
-        {opts.ringAromatic && opts.ringSize === 6 && (
+        {opts.ringKind === 'regular' && opts.ringAromatic && opts.ringSize === 6 && (
           <circle cx={plan.pts.reduce((s, q) => s + q.x, 0) / 6} cy={plan.pts.reduce((s, q) => s + q.y, 0) / 6} r={L * 0.55} fill="none" stroke={ACCENT} strokeWidth={doc.style.lineWidth} strokeDasharray="3 3" />
         )}
       </g>,
@@ -1829,15 +1862,79 @@ export function Canvas() {
             <circle cx={1} cy={1} r={0.9} fill="var(--grid-dot)" />
           </pattern>
         </defs>
-        <rect width="100%" height="100%" fill="url(#grid)" />
+        {page ? (
+          // Seitenlayout: graue Fläche um die Blätter (wie ChemDraw), kein Punktraster
+          <rect width="100%" height="100%" fill="var(--page-backdrop)" />
+        ) : (
+          <>
+            {doc.style.background && <rect width="100%" height="100%" fill={doc.style.background} />}
+            <rect width="100%" height="100%" fill="url(#grid)" />
+          </>
+        )}
         <g transform={`translate(${view.panX},${view.panY}) scale(${z})`}>
+          {page && <PageSheet page={page} background={doc.style.background} zoom={z} />}
           <g className="overlay-below">{below}</g>
           <Content scene={scene} />
           <g className="overlay-above">{overlay}</g>
         </g>
+        {page && !editing && <PagePlusButtons page={page} view={view} />}
       </svg>
       {editing && <InlineEditor key={editing.id + (editing.which ?? '') + (editing.part ?? '')} />}
     </div>
+  )
+}
+
+/** Blätter des Seitenlayouts: weiße (bzw. farbige) Fläche mit Schatten, Seitengrenzen gestrichelt */
+function PageSheet({ page, background, zoom }: { page: PageLayout; background?: string; zoom: number }) {
+  const b = sheetBox(page)
+  const { w, h } = pageDims(page)
+  const lines = []
+  for (let c = 1; c < page.cols; c++) lines.push(<line key={'c' + c} x1={b.x1 + c * w} y1={b.y1} x2={b.x1 + c * w} y2={b.y2} />)
+  for (let r = 1; r < page.rows; r++) lines.push(<line key={'r' + r} x1={b.x1} y1={b.y1 + r * h} x2={b.x2} y2={b.y1 + r * h} />)
+  const s = 1 / zoom
+  return (
+    <g className="page-sheet" pointerEvents="none">
+      <rect x={b.x1 + 3 * s} y={b.y1 + 4 * s} width={b.x2 - b.x1} height={b.y2 - b.y1} fill="rgba(16,24,40,0.18)" />
+      <rect x={b.x1} y={b.y1} width={b.x2 - b.x1} height={b.y2 - b.y1} fill={background ?? '#ffffff'} stroke="var(--page-edge)" strokeWidth={s} />
+      <g stroke="var(--page-edge)" strokeWidth={s} strokeDasharray={`${6 * s} ${5 * s}`}>
+        {lines}
+      </g>
+    </g>
+  )
+}
+
+/** große „+“-Knöpfe an den vier Rändern: eine weitere Seite gleichen Formats anbauen */
+function PagePlusButtons({ page, view }: { page: PageLayout; view: View }) {
+  const b = sheetBox(page)
+  const sx = (x: number) => x * view.zoom + view.panX
+  const sy = (y: number) => y * view.zoom + view.panY
+  const cx = (sx(b.x1) + sx(b.x2)) / 2
+  const cy = (sy(b.y1) + sy(b.y2)) / 2
+  const off = 30
+  const spots: { side: 'top' | 'bottom' | 'left' | 'right'; x: number; y: number; tip: string }[] = [
+    { side: 'top', x: cx, y: sy(b.y1) - off, tip: 'Seite oben anbauen' },
+    { side: 'bottom', x: cx, y: sy(b.y2) + off, tip: 'Seite unten anbauen' },
+    { side: 'left', x: sx(b.x1) - off, y: cy, tip: 'Seite links anbauen' },
+    { side: 'right', x: sx(b.x2) + off, y: cy, tip: 'Seite rechts anbauen' },
+  ]
+  return (
+    <g className="page-plus">
+      {spots.map((p) => (
+        <g
+          key={p.side}
+          transform={`translate(${p.x},${p.y})`}
+          data-tip={p.tip}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            addPage(p.side)
+          }}
+        >
+          <circle r={18} />
+          <path d="M -8 0 H 8 M 0 -8 V 8" />
+        </g>
+      ))}
+    </g>
   )
 }
 

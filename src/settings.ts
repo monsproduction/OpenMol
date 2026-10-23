@@ -5,8 +5,6 @@ import { useSyncExternalStore } from 'react'
 export interface AppSettings {
   /** Dezimaltrennzeichen für alle angezeigten Zahlen (Analyse, Ansatztabelle, Exporte) */
   decimal: ',' | '.'
-  /** Sprache neu angelegter Ansatztabellen */
-  tableLang: 'de' | 'en'
   /** KI-Steuerung über MCP erlauben (Brücke zum MCP-Server auf 127.0.0.1:5181) */
   aiControl: boolean
   /** Sprache der Oberfläche */
@@ -18,7 +16,7 @@ export interface AppSettings {
 }
 
 const KEY = 'openmol:settings'
-const DEFAULTS: AppSettings = { decimal: ',', tableLang: 'de', aiControl: false, uiLang: 'de', autoPubchem: true, autoUpdate: true }
+const DEFAULTS: AppSettings = { decimal: ',', aiControl: false, uiLang: 'de', autoPubchem: true, autoUpdate: true }
 
 function load(): AppSettings {
   try {
@@ -27,7 +25,6 @@ function load(): AppSettings {
       const v = JSON.parse(raw) as Partial<AppSettings>
       return {
         decimal: v.decimal === '.' ? '.' : ',',
-        tableLang: v.tableLang === 'en' ? 'en' : 'de',
         aiControl: v.aiControl === true,
         uiLang: v.uiLang === 'en' ? 'en' : 'de',
         autoPubchem: v.autoPubchem !== false,

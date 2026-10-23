@@ -267,7 +267,7 @@ tool(
 tool('get_image', 'Render the current drawing (or only the selection) as a PNG image so you can look at the result. A short text description of the content comes first, for models that cannot read images.', {
   only_selection: z.boolean().optional().describe('only the currently selected objects'),
 })
-tool('new_document', 'Start a new, empty document (the previous one can be restored with undo).', {
+tool('new_document', 'Start a new, empty document in a new tab (the previous document stays open in its own tab).', {
   name: z.string().optional().describe('file name of the new document'),
 })
 tool(
@@ -557,6 +557,7 @@ tool('set_document_style', 'Set individual document style values (all optional).
   show_all_carbons: z.boolean().optional(),
   circle_charges: z.boolean().optional(),
   show_cip: z.boolean().optional(),
+  background: z.string().optional().describe('Background colour of the document, e.g. "#f4f5f7"; "" = white (default)'),
 })
 
 // ---------- Start: stdio (Standard) oder HTTP ----------

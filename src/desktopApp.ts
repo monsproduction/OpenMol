@@ -2,10 +2,11 @@
 // Wird nur gestartet, wenn die Oberfläche in der Desktop-App läuft (siehe main.tsx).
 import { desktop } from './desktop'
 import { getSettings, subscribeSettings } from './settings'
-import { getState, redo, setState, setTool, subscribe, toggleInspector, undo } from './store'
+import { cycleTab, getState, markSession, redo, setState, setTool, subscribe, toggleInspector, undo } from './store'
 import {
   cleanStructure,
   contractGroups,
+  createStoichTable,
   copySelection,
   deleteSelection,
   duplicateSelection,
@@ -18,7 +19,7 @@ import {
 } from './tools/actions'
 import { cleanReaction } from './tools/cleanup'
 import { exportCdxml } from './tools/cdxml'
-import { confirmDiscard, copyImageToClipboard, currentFilePath, exportMolfile, exportPng, exportSvg, newDocument, openFile, openText, saveDocument } from './tools/io'
+import { closeTab, confirmDiscardAll, copyImageToClipboard, currentFilePath, exportMolfile, exportPdf, exportPng, exportSvg, newDocument, openFile, openText, saveDocument } from './tools/io'
 import { toggleTheme } from './ui/TopBar'
 
 /** Fokus in einem Eingabefeld/bearbeitbaren Text: dort gelten die System-Befehle (Kopieren, Einfügen …) */
@@ -40,6 +41,10 @@ export function runMenuCommand(cmd: string) {
   const zoom = getState().view.zoom
   const run: Record<string, () => unknown> = {
     new: newDocument,
+    newTab: newDocument,
+    closeTab: () => closeTab(),
+    nextTab: () => cycleTab(1),
+    prevTab: () => cycleTab(-1),
     open: openFile,
     save: () => saveDocument(),
     saveAs: () => saveDocument(true),
@@ -48,6 +53,7 @@ export function runMenuCommand(cmd: string) {
     exportPng: () => exportPng(),
     exportSvg: () => exportSvg(),
     exportMol: exportMolfile,
+    exportPdf,
     exportCdxml,
     settings: () => setState({ dialog: 'settings' }),
     help: () => setState({ dialog: 'help' }),
@@ -67,6 +73,7 @@ export function runMenuCommand(cmd: string) {
     },
     cleanStructure,
     cleanReaction,
+    stoichTable: createStoichTable,
     toggle3d: toggle3D,
     contract: contractGroups,
     expand: expandGroups,
@@ -116,8 +123,11 @@ export function startDesktop() {
     }
   })
   desktop.onCloseRequest(async () => {
-    if (await confirmDiscard()) desktop!.closeOk()
-    else desktop!.closeCancel()
+    if (await confirmDiscardAll()) {
+      // ordentlich beendet: beim nächsten Start keine Wiederherstellungs-Frage
+      markSession(false)
+      desktop!.closeOk()
+    } else desktop!.closeCancel()
   })
 
   // Menüleiste in der Sprache der Oberfläche

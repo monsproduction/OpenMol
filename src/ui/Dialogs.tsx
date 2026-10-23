@@ -20,11 +20,11 @@ import {
   useUserLib,
   type UserTemplate,
 } from '../model/userlib'
-import { getState, setState, setTool, toast, toggleInspector, useStore } from '../store'
+import { getState, setState, setTool, toast, useStore } from '../store'
 import { getSettings, setSettings, useSettings } from '../settings'
 import { useAiStatus } from '../tools/aiBridge'
 import { fitView, insertStructureText, selectionAsTemplateClip } from '../tools/actions'
-import { copyImageToClipboard, copySmiles, exportMolfile, exportPng, exportSvg, saveBlob, saveDocument } from '../tools/io'
+import { copyImageToClipboard, copySmiles, exportMolfile, exportPdf, exportPng, exportSvg, saveBlob, saveDocument } from '../tools/io'
 import { exportCdxml } from '../tools/cdxml'
 import { Icon } from './Icons'
 import { T } from '../i18n/i18n'
@@ -471,8 +471,7 @@ function McpSetup({ info }: { info: McpInfo }) {
     }
   }
   return (
-    <>
-      <label className="field-label">KI-Anwendung verbinden</label>
+    <SRow label="KI-Anwendung verbinden" tip="Der MCP-Server ist Teil von OpenMol – kein Projektordner und kein Node.js nötig. Nach dem Eintragen die KI-Anwendung neu starten.">
       <div className="cyc-add">
         <button
           className="btn small"
@@ -491,108 +490,92 @@ function McpSetup({ info }: { info: McpInfo }) {
           Befehl für Claude Code
         </button>
       </div>
-      <p className="muted small">Der MCP-Server ist Teil von OpenMol – kein Projektordner und kein Node.js nötig. Nach dem Eintragen die KI-Anwendung neu starten.</p>
+    </SRow>
+  )
+}
+
+/** Zeile der Einstellungen: Bezeichnung links (Erklärung als Tooltip), Bedienelement rechts */
+function SRow({ label, tip, children }: { label: string; tip?: string; children: React.ReactNode }) {
+  return (
+    <>
+      <label className="set-label" data-tip={tip}>
+        {label}
+        {tip && <span className="set-info">ⓘ</span>}
+      </label>
+      <div className="set-ctrl">{children}</div>
     </>
+  )
+}
+
+/** Umschalter aus zwei oder mehr Knöpfen */
+function SegPick<T extends string | boolean>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <div className="seg">
+      {options.map(([v, l]) => (
+        <button key={String(v)} className={value === v ? 'active' : ''} onClick={() => onChange(v)}>
+          {l}
+        </button>
+      ))}
+    </div>
   )
 }
 
 function SettingsDialog() {
   const s = useSettings()
   const ai = useAiStatus()
-  const hidden = useStore((st) => st.inspectorHidden)
   const defaultOrder = useSectionOrder().every((id, i) => id === SECTION_IDS[i])
   // Desktop-App: mitgelieferter MCP-Server (Pfade für die Einrichtung der KI-Anwendung)
   const [mcp] = useState(() => desktop?.mcpInfo())
   return (
     <Modal title="Einstellungen" onClose={close}>
-      <div className="settings-grid">
-        <label className="field-label">Sprache der Oberfläche</label>
-        <div className="seg">
-          <button className={s.uiLang === 'de' ? 'active' : ''} onClick={() => setSettings({ uiLang: 'de' })}>
-            Deutsch
-          </button>
-          <button className={s.uiLang === 'en' ? 'active' : ''} onClick={() => setSettings({ uiLang: 'en' })}>
-            English
-          </button>
-        </div>
-        <label className="field-label">Dezimaltrennzeichen</label>
-        <div className="seg">
-          <button className={s.decimal === ',' ? 'active' : ''} onClick={() => setSettings({ decimal: ',' })}>
-            Komma (1,25)
-          </button>
-          <button className={s.decimal === '.' ? 'active' : ''} onClick={() => setSettings({ decimal: '.' })}>
-            Punkt (1.25)
-          </button>
-        </div>
-        <p className="muted small">Gilt überall: Analyse, Ansatztabellen (auch im Schema und in Exporten). Eingaben verstehen immer beides.</p>
-        <label className="field-label">Sprache neuer Ansatztabellen</label>
-        <div className="seg">
-          <button className={s.tableLang === 'de' ? 'active' : ''} onClick={() => setSettings({ tableLang: 'de' })}>
-            Deutsch
-          </button>
-          <button className={s.tableLang === 'en' ? 'active' : ''} onClick={() => setSettings({ tableLang: 'en' })}>
-            English
-          </button>
-        </div>
-        <label className="field-label">Ansatztabelle: CAS-Nummern &amp; GHS-Symbole</label>
-        <div className="seg">
-          <button className={s.autoPubchem ? 'active' : ''} onClick={() => setSettings({ autoPubchem: true })}>
-            Automatisch
-          </button>
-          <button className={!s.autoPubchem ? 'active' : ''} onClick={() => setSettings({ autoPubchem: false })}>
-            Nur per Knopf
-          </button>
-        </div>
-        <p className="muted small">Automatisch: Edukte, Reagenzien und Lösungsmittel werden beim Anlegen in PubChem (online) nachgeschlagen. Produkte nie automatisch – neue Verbindungen verlassen den Rechner nur, wenn Sie „CAS &amp; GHS suchen“ wählen.</p>
-        <label className="field-label">Inspektor (rechte Leiste)</label>
-        <div className="seg">
-          <button className={!hidden ? 'active' : ''} onClick={() => toggleInspector(false)}>
-            Einblenden
-          </button>
-          <button className={hidden ? 'active' : ''} onClick={() => toggleInspector(true)}>
-            Ausblenden
-          </button>
-        </div>
-        <p className="muted small">
-          Auch mit ⌘\ umschaltbar. Kategorien lassen sich an ihrer Überschrift verschieben (ziehen oder ⌥↑ / ⌥↓).{' '}
-          <button className="link-btn" onClick={() => resetSectionOrder()} disabled={defaultOrder}>
+      <div className="settings-rows">
+        <h4 className="set-group">Allgemein</h4>
+        <SRow label="Sprache">
+          <SegPick value={s.uiLang} options={[['de', 'Deutsch'], ['en', 'English']]} onChange={(v) => setSettings({ uiLang: v })} />
+        </SRow>
+        <SRow label="Dezimaltrennzeichen" tip="Gilt überall: Analyse, Ansatztabellen (auch im Schema und in Exporten). Eingaben verstehen immer beides.">
+          <SegPick value={s.decimal} options={[[',', 'Komma (1,25)'], ['.', 'Punkt (1.25)']]} onChange={(v) => setSettings({ decimal: v })} />
+        </SRow>
+        <SRow label="Inspektor" tip="Kategorien lassen sich an ihrer Überschrift verschieben (ziehen oder ⌥↑ / ⌥↓).">
+          <button className="btn small" onClick={() => resetSectionOrder()} disabled={defaultOrder}>
             Reihenfolge zurücksetzen
           </button>
-        </p>
-        <label className="field-label">KI-Steuerung (MCP)</label>
-        <div className="seg">
-          <button className={s.aiControl ? 'active' : ''} onClick={() => setSettings({ aiControl: true })}>
-            Erlauben
-          </button>
-          <button className={!s.aiControl ? 'active' : ''} onClick={() => setSettings({ aiControl: false })}>
-            Aus
-          </button>
-        </div>
-        <p className="muted small">
+        </SRow>
+
+        <h4 className="set-group">Ansatztabellen</h4>
+        <SRow
+          label="CAS & GHS aus PubChem"
+          tip="Automatisch: Edukte, Reagenzien und Lösungsmittel werden beim Anlegen in PubChem (online) nachgeschlagen. Produkte nie automatisch – neue Verbindungen verlassen den Rechner nur, wenn Sie „CAS & GHS suchen“ wählen."
+        >
+          <SegPick value={s.autoPubchem} options={[[true, 'Automatisch'], [false, 'Nur per Knopf']]} onChange={(v) => setSettings({ autoPubchem: v })} />
+        </SRow>
+
+        <h4 className="set-group">KI-Steuerung (MCP)</h4>
+        <SRow label="Steuerung durch KI">
+          <SegPick value={s.aiControl} options={[[true, 'Erlauben'], [false, 'Aus']]} onChange={(v) => setSettings({ aiControl: v })} />
+        </SRow>
+        <p className="muted small set-note">
           {s.aiControl
             ? ai === 'connected'
-              ? '● Verbunden – eine KI-Anwendung (Claude, Cursor, VS Code, LM Studio …) kann die Zeichnung bearbeiten (alles mit ⌘Z rückgängig).'
-              : '○ Warte auf den OpenMol-MCP-Server (127.0.0.1:5181) – er wird von der KI-Anwendung gestartet. Einrichtung: siehe mcp/ANLEITUNG.md.'
+              ? '● Verbunden – eine KI-Anwendung kann die Zeichnung bearbeiten (alles mit ⌘Z rückgängig).'
+              : desktop
+                ? '○ Warte auf eine KI-Anwendung – Einrichtung über „Prompt für die KI kopieren“.'
+                : '○ Warte auf den OpenMol-MCP-Server (127.0.0.1:5181) – er wird von der KI-Anwendung gestartet. Einrichtung: siehe mcp/ANLEITUNG.md.'
             : 'Aus: Die App nimmt keine Befehle von außen an.'}
         </p>
         {mcp?.available && <McpSetup info={mcp} />}
+
         {desktop && (
           <>
-            <label className="field-label">{`Updates (installierte Version ${desktop.appVersion()})`}</label>
-            <div className="seg">
-              <button className={s.autoUpdate ? 'active' : ''} onClick={() => setSettings({ autoUpdate: true })}>
-                Automatisch suchen
-              </button>
-              <button className={!s.autoUpdate ? 'active' : ''} onClick={() => setSettings({ autoUpdate: false })}>
-                Nur von Hand
-              </button>
-            </div>
-            <p className="muted small">
-              Automatisch: Beim Start (höchstens einmal am Tag) wird bei GitHub nach einer neuen Version gefragt; installiert wird nur nach Rückfrage.{' '}
-              <button className="link-btn" onClick={() => desktop?.checkUpdates()}>
-                Jetzt nach Updates suchen
-              </button>
-            </p>
+            <h4 className="set-group">{`Updates · Version ${desktop.appVersion()}`}</h4>
+            <SRow label="Nach Updates suchen" tip="Automatisch: Beim Start (höchstens einmal am Tag) wird bei GitHub nach einer neuen Version gefragt; installiert wird nur nach Rückfrage.">
+              <div className="cyc-add">
+                <SegPick value={s.autoUpdate} options={[[true, 'Automatisch'], [false, 'Nur von Hand']]} onChange={(v) => setSettings({ autoUpdate: v })} />
+                <button className="btn small" onClick={() => desktop?.checkUpdates()}>
+                  Jetzt suchen
+                </button>
+              </div>
+            </SRow>
           </>
         )}
       </div>
@@ -713,6 +696,13 @@ function ExportDialog() {
             Speichern
           </button>
         </div>
+        <button className="export-item" onClick={() => (void exportPdf(), close())}>
+          <Icon name="export" />
+          <div>
+            <b>PDF</b>
+            <span>Vektor-PDF zum Drucken und Weitergeben – bei Seitenlayout je Blatt eine Seite</span>
+          </div>
+        </button>
         <button className="export-item" onClick={() => (copyImageToClipboard(), close())}>
           <Icon name="copy" />
           <div>
@@ -775,9 +765,14 @@ const SHORTCUTS: [string, string][] = [
   ['⌘/Strg + A', 'Alles auswählen'],
   ['Klick auf Atom/Bindung', 'Nur dieses Atom bzw. diese Bindung markieren'],
   ['Doppelklick auf Atom/Bindung', 'Ganzes Molekül markieren'],
-  ['Enter (Atom ausgewählt)', 'Atom beschriften'],
+  ['Enter (Auswahl)', 'Auswahl wird Hotspot (grüner Punkt) für ChemDraw-Tasten; nochmals Enter = Atom beschriften'],
+  ['Leertaste / Tab (Hotspot)', 'Ganzes Molekül markieren'],
+  ['Pfeiltasten (Hotspot)', 'Hotspot zum nächsten Atom bzw. zur nächsten Bindung bewegen'],
   ['⌘/Strg + S / ⇧⌘S', 'Speichern / Speichern unter'],
   ['⌘/Strg + O', 'Öffnen'],
+  ['⌘/Strg + N / T', 'Neues Dokument in einem neuen Tab (Desktop-App)'],
+  ['⌘/Strg + W', 'Tab schließen (Desktop-App)'],
+  ['Strg + Tab / Strg + ⇧ + Tab', 'Nächster / vorheriger Tab (Desktop-App)'],
   ['⌘/Strg + E', 'Exportieren'],
   ['⌘/Strg + 0', 'Ansicht einpassen'],
   ['⇧⌘K', 'Struktur aufräumen'],
@@ -785,6 +780,9 @@ const SHORTCUTS: [string, string][] = [
   ['⇧⌘D', 'Markierte Struktur in 3D / zurück in 2D'],
   ['Entf / ⌫', 'Auswahl löschen'],
   ['Pfeiltasten', 'Auswahl verschieben (⇧ = 10×)'],
+  ['⌥ + ← / →', 'Auswahl um 15° drehen (⌥ + ↑ / ↓: um 1°)'],
+  ['⇧⌥ + Pfeiltasten', 'Auswahl räumlich (3D) drehen'],
+  ['⌘ + Pfeiltaste', 'Reaktion: Kopie der Moleküle hinter einem neuen Reaktionspfeil'],
   ['⌘/Strg beim Ziehen', 'Magnetische Hilfslinien kurz ausschalten'],
   ['Esc', 'Abbrechen / Auswahl aufheben'],
   ['Im Text: ⌘B / ⌘I / ⌘U', 'Fett / Kursiv / Unterstrichen'],
@@ -799,18 +797,26 @@ const SHORTCUTS: [string, string][] = [
 ]
 
 const HOVER_KEYS: [string, string][] = [
-  ['C N O S P F H I', 'Element setzen (auch für markierte Atome)'],
-  ['C (über C-Atom)', 'Dieses C-Atom sichtbar beschriften / wieder ausblenden'],
-  ['l / b', 'Cl / Br'],
-  ['⇧B / ⇧C', 'Bor / Chlor'],
-  ['andere Buchstaben (R, X, A …)', 'Genau dieser Buchstabe als Beschriftung (z. B. R für einen Rest)'],
+  ['o n s p f l b h i', 'O, N, S, P, F, Cl, Br, H, I (auch für markierte Atome)'],
+  ['c', 'C – auf einem C-Atom: Beschriftung CH₃ ein-/ausblenden'],
+  ['O N S P F C L B', 'OMe, NO₂, SiH₃, Ph, CF₃, Cl, Li, BH₂'],
+  ['m e A y H Q E M d Z', 'Me, Et, Ac, Boc, Cbz, Fmoc, CO₂Me, MgBr, D, N₃'],
+  ['1 / 0', 'Bindung anhängen (0: in die andere Richtung)'],
+  ['2', 'Carbonyl (=O), am Kettenende mit weiterer Bindung'],
+  ['8 / z', 'Doppel- / Dreifachbindung anhängen'],
+  ['9 / 4 / 5', 'Methyl-Verzweigung (4/5 als Keil/Schraffur); am Ringatom 9: gem-Dimethyl'],
+  ['K', 'Quartäres C; am Ringatom: gem-Dimethyl mit Keil und Schraffur'],
+  ['k', 'Sulfonyl (SO₂)'],
+  ['3 / a · 6 · 7 · u · v', 'Benzol, Cyclohexan, Cyclopentan, Cyclobutan, Cyclopropan (am Ringatom: spiro)'],
+  ['andere Buchstaben (R, X, T …)', 'Genau dieser Buchstabe als Beschriftung (z. B. R für einen Rest)'],
   ['+ / −', 'Ladung ändern'],
-  ['.', 'Radikal'],
-  [':', 'Freies Elektronenpaar'],
-  ['*', 'Als Stereozentrum markieren (R/S im Eigenschaften-Panel)'],
+  ['. / : / *', 'Radikal / freies Elektronenpaar / Stereozentrum'],
   ['Enter', 'Label bearbeiten'],
-  ['1 / 2 / 3 (über Bindung)', 'Bindungsordnung'],
-  ['W / H (über Bindung)', 'Keil / schraffiert'],
+  ['g', 'Atom bzw. Bindung markieren'],
+  ['Bindung: 1 2 3', 'Bindungsordnung'],
+  ['Bindung: w · h / W · b · d · D · y', 'Keil, Schraffur (nochmals: umdrehen), fett, gestrichelt, aromatisch, Wellenlinie'],
+  ['Bindung: a z v 4–8', 'Ring ankondensieren: Benzol, Cyclopentadien, 3- bis 8-Ring'],
+  ['Bindung: 9 / 0', 'Sessel-Cyclohexan (zwei Ausrichtungen)'],
   ['Entf (über Objekt)', 'Löschen'],
 ]
 
@@ -834,7 +840,11 @@ function HelpDialog() {
           </table>
         </div>
         <div>
-          <h3>Maus über Atom/Bindung + Taste</h3>
+          <h3>ChemDraw-Tasten: Maus über Atom/Bindung oder am Hotspot</h3>
+          <p className="muted small">
+            Nach einer dieser Tasten markiert ein grüner Punkt den Hotspot – weitere Tasten wirken dort, auch ohne Maus darüber. So entstehen ganze
+            Moleküle mit der Tastatur, z. B. an einem Benzol-Atom <code>1B79←←←←o↓↓↓↓o→→9</code> (Pinakolboronat). Klick, Esc oder Wegbewegen der Maus beendet den Hotspot.
+          </p>
           <table className="keys">
             <tbody>
               {HOVER_KEYS.map(([k, v]) => (
@@ -856,8 +866,8 @@ function HelpDialog() {
           </ol>
           <h3>Beschriftungen</h3>
           <p className="muted small">
-            Maus über ein Atom (oder Atom auswählen) + Enter und z. B. <code>OMe</code>, <code>CO2H</code>, <code>Ph</code>, <code>NHBoc</code>, <code>R</code> eingeben. Bekannte Gruppen fließen
-            korrekt in Summenformel und Masse ein und werden automatisch gespiegelt (MeO–).
+            Maus über ein Atom + Enter (bzw. Atom auswählen und zweimal Enter), dann die Beschriftung eintippen, z. B. <code>OMe</code>, <code>CO2H</code>, <code>Ph</code>,{' '}
+            <code>NHBoc</code>, <code>R</code>. Bekannte Gruppen fließen korrekt in Summenformel und Masse ein und werden automatisch gespiegelt (MeO–).
           </p>
         </div>
       </div>

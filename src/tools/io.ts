@@ -4,10 +4,11 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { selectionAtomIds } from '../model/ops'
 import { toMolfile, toSmiles } from '../model/ocl'
 import { getScene, sceneBBox } from '../model/scene'
+import { PT_PER_UNIT, pageRects } from '../model/pages'
 import type { Doc } from '../model/types'
-import { emptyDoc, normalizeDoc, selectionSize } from '../model/types'
+import { normalizeDoc, selectionSize } from '../model/types'
 import { DocContent } from '../render/DocSvg'
-import { getState, replaceDoc, setState, toast } from '../store'
+import { allTabs, getState, openTab, removeTab, replaceDoc, setState, switchTab, toast } from '../store'
 import { fitView, insertStructureText } from './actions'
 import { T } from '../i18n/i18n'
 import { desktop, type FileFilter } from '../desktop'
@@ -21,11 +22,11 @@ const EXPORT_FILTERS: Record<string, FileFilter[]> = {
   mol: [{ name: 'Molfile', extensions: ['mol'] }],
   cdxml: [{ name: 'ChemDraw (CDXML)', extensions: ['cdxml'] }],
   json: [{ name: 'JSON', extensions: ['json'] }],
+  pdf: [{ name: 'PDF', extensions: ['pdf'] }],
 }
 
 /** Desktop-App: Pfad des geöffneten bzw. zuletzt gespeicherten Dokuments („Speichern“ schreibt ohne Dialog dorthin) */
-let filePath: string | null = null
-export const currentFilePath = () => filePath
+export const currentFilePath = () => getState().filePath
 
 /**
  * Datei sichern: in der Desktop-App mit Sichern-Dialog, im Browser als Download.
@@ -57,6 +58,13 @@ function download(name: string, data: Blob) {
   a.click()
   a.remove()
   setTimeout(() => URL.revokeObjectURL(url), 2000)
+}
+
+/** Zeichnung als SVG-Inhalt; im SVG-Kontext rendern (sonst hält React <linearGradient> usw. für HTML), äußeres <svg> wieder entfernen */
+function innerMarkup(scene: ReturnType<typeof getScene>): string {
+  return renderToStaticMarkup(createElement('svg', null, createElement(DocContent, { scene, exportMode: true })))
+    .replace(/^<svg[^>]*>/, '')
+    .replace(/<\/svg>$/, '')
 }
 
 /** Dokument (oder Auswahl) als SVG-String */
@@ -96,10 +104,7 @@ export function exportSvgString(doc: Doc, opts: { onlySelection?: boolean; paddi
   const y = box.y1 - pad
   const w = Math.ceil(box.x2 - box.x1 + 2 * pad)
   const h = Math.ceil(box.y2 - box.y1 + 2 * pad)
-  // im SVG-Kontext rendern (sonst hält React <linearGradient> usw. für HTML), äußeres <svg> wieder entfernen
-  const inner = renderToStaticMarkup(createElement('svg', null, createElement(DocContent, { scene, exportMode: true })))
-    .replace(/^<svg[^>]*>/, '')
-    .replace(/<\/svg>$/, '')
+  const inner = innerMarkup(scene)
   const bg = opts.background ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${opts.background}"/>` : ''
   const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${x} ${y} ${w} ${h}">${bg}${inner}</svg>`
   return { svg, w, h }
@@ -110,7 +115,8 @@ function baseName() {
 }
 
 export function exportSvg(onlySelection = false) {
-  const r = exportSvgString(getState().doc, { onlySelection })
+  const { doc } = getState()
+  const r = exportSvgString(doc, { onlySelection, background: doc.style.background })
   if (!r) return toast('Nichts zu exportieren', 'error')
   void saveBlob(baseName() + '.svg', new Blob([r.svg], { type: 'image/svg+xml' }))
 }
@@ -176,7 +182,8 @@ export async function withPngDpi(blob: Blob, dpi: number): Promise<Blob> {
 const UNITS_PER_INCH = 200
 
 export async function renderPng(onlySelection: boolean, scale: number, transparent: boolean): Promise<Blob | null> {
-  const r = exportSvgString(getState().doc, { onlySelection, background: transparent ? undefined : '#ffffff' })
+  const { doc } = getState()
+  const r = exportSvgString(doc, { onlySelection, background: transparent ? undefined : (doc.style.background ?? '#ffffff') })
   if (!r) return null
   const raw = await svgToPngBlob(r.svg, r.w, r.h, scale)
   return withPngDpi(raw, UNITS_PER_INCH * scale)
@@ -192,14 +199,67 @@ export async function exportPng(scale = 4, transparent = false, onlySelection = 
   }
 }
 
+// ---------- PDF ----------
+
+/**
+ * PDF als HTML-Seite: je Blatt des Seitenlayouts ein SVG in Originalgröße (1 Einheit = 0,36 pt); ohne Seitenlayout
+ * eine Seite in Größe der Zeichnung. Rückgabe mit Seitengröße in Zoll.
+ */
+export function pdfHtml(doc: Doc): { html: string; width: number; height: number; pages: number } | null {
+  const scene = getScene(doc)
+  let pages: { x: number; y: number; w: number; h: number }[]
+  if (doc.style.page) pages = pageRects(doc.style.page)
+  else {
+    const box = sceneBBox(scene)
+    if (!box) return null
+    const pad = 24
+    pages = [{ x: box.x1 - pad, y: box.y1 - pad, w: box.x2 - box.x1 + 2 * pad, h: box.y2 - box.y1 + 2 * pad }]
+  }
+  const inner = innerMarkup(scene)
+  const bg = doc.style.background ?? '#ffffff'
+  const W = +(pages[0].w * PT_PER_UNIT).toFixed(2)
+  const H = +(pages[0].h * PT_PER_UNIT).toFixed(2)
+  const sheets = pages.map(
+    (p) =>
+      `<div class="sheet"><svg xmlns="http://www.w3.org/2000/svg" width="${W}pt" height="${H}pt" viewBox="${p.x} ${p.y} ${p.w} ${p.h}"><rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${bg}"/>${inner}</svg></div>`,
+  )
+  const css = `@page{size:${W}pt ${H}pt;margin:0}html,body{margin:0;padding:0}.sheet{width:${W}pt;height:${H}pt;overflow:hidden;break-after:page}.sheet:last-child{break-after:auto}svg{display:block}`
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>${baseName().replace(/[<>&"]/g, '')}</title><style>${css}</style></head><body>${sheets.join('')}</body></html>`
+  return { html, width: W / 72, height: H / 72, pages: pages.length }
+}
+
+/** PDF exportieren: Desktop als Vektor-PDF (je Blatt eine Seite), im Browser über den Druckdialog („Als PDF sichern“) */
+export async function exportPdf() {
+  const r = pdfHtml(getState().doc)
+  if (!r) return toast('Nichts zu exportieren', 'error')
+  if (desktop) {
+    try {
+      const bytes = await desktop.printPdf(r.html, { width: r.width, height: r.height })
+      await saveBlob(baseName() + '.pdf', new Blob([bytes as BlobPart], { type: 'application/pdf' }))
+    } catch (e) {
+      toast(T('PDF konnte nicht erstellt werden') + ': ' + (e instanceof Error ? e.message : String(e)), 'error')
+    }
+    return
+  }
+  const f = document.createElement('iframe')
+  f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  f.srcdoc = r.html
+  f.onload = () => {
+    f.contentWindow?.focus()
+    f.contentWindow?.print()
+    setTimeout(() => f.remove(), 60_000)
+  }
+  document.body.appendChild(f)
+}
+
 /** Kopiert die Auswahl (oder alles) als PNG – direkt in Word, PowerPoint, Keynote … einfügbar */
 export async function copyImageToClipboard(silent = false) {
   const { sel } = getState()
   const only = selectionSize(sel) > 0
   try {
     // Promise im ClipboardItem: funktioniert auch in Safari innerhalb der Nutzeraktion. Transparenter Hintergrund
-    // (passt auf farbige Folien); weiß gefüllte Objekte der Zeichnung bleiben weiß
-    const png = renderPng(only, 4, true).then((b) => {
+    // (passt auf farbige Folien), außer das Dokument hat eine eigene Hintergrundfarbe; weiß gefüllte Objekte bleiben weiß
+    const png = renderPng(only, 4, !getState().doc.style.background).then((b) => {
       if (!b) throw new Error('leer')
       return b
     })
@@ -257,7 +317,7 @@ export async function saveDocument(saveAs = false): Promise<boolean> {
     toast('Gespeichert')
     return true
   }
-  let p = saveAs ? null : filePath
+  let p = saveAs ? null : getState().filePath
   if (!p) {
     p = await desktop.saveDialog({ title: saveAs ? T('Speichern unter') : T('Speichern'), defaultPath: base + FILE_EXT, filters: DOC_FILTER })
     if (!p) return false
@@ -268,8 +328,7 @@ export async function saveDocument(saveAs = false): Promise<boolean> {
     toast(T('Datei konnte nicht gespeichert werden') + ': ' + (e instanceof Error ? e.message : String(e)), 'error')
     return false
   }
-  filePath = p
-  setState({ dirty: false, fileName: stripExt(p.split(/[\\/]/).pop() ?? base) })
+  setState({ dirty: false, filePath: p, fileName: stripExt(p.split(/[\\/]/).pop() ?? base) })
   toast('Gespeichert')
   return true
 }
@@ -293,11 +352,60 @@ export async function confirmDiscard(): Promise<boolean> {
   return r === 1
 }
 
-export async function newDocument() {
-  const { doc } = getState()
-  if (!(await confirmDiscard())) return
-  filePath = null
-  replaceDoc({ ...emptyDoc(), style: { ...doc.style } }, 'Unbenannt')
+/**
+ * Beim Beenden: alle Tabs mit ungesicherten Änderungen in einer Liste – „Alle sichern“ (nacheinander, unbenannte mit
+ * Dialog), „Nicht sichern“ oder „Abbrechen“. Rückgabe: beenden?
+ */
+export async function confirmDiscardAll(): Promise<boolean> {
+  const open = allTabs().filter((t) => t.dirty && hasContent(t.doc))
+  if (!open.length) return true
+  if (open.length === 1) {
+    switchTab(open[0].id)
+    return confirmDiscard()
+  }
+  if (!desktop) return window.confirm(T('Nicht gespeicherte Änderungen gehen verloren. Fortfahren?'))
+  const r = await desktop.confirm({
+    type: 'warning',
+    message: T('{0} Dokumente haben ungesicherte Änderungen. Sichern?').replace('{0}', String(open.length)),
+    detail: open.map((t) => '• ' + (t.fileName || 'Unbenannt')).join('\n') + '\n\n' + T('Ohne Sichern gehen die Änderungen verloren.'),
+    buttons: [T('Alle sichern'), T('Nicht sichern'), T('Abbrechen')],
+    cancelId: 2,
+  })
+  if (r !== 0) return r === 1
+  for (const t of open) {
+    switchTab(t.id)
+    if (!(await saveDocument())) return false
+  }
+  return true
+}
+
+/** Neues Dokument in einem neuen Tab – immer im Standardstil (jede Datei bringt ihren eigenen Stil mit) */
+export function newDocument() {
+  openTab()
+}
+
+/** Tab schließen; bei ungesicherten Änderungen wird erst nachgefragt (dazu wird der Tab angezeigt) */
+export async function closeTab(id = getState().activeTab): Promise<boolean> {
+  const t = allTabs().find((x) => x.id === id)
+  if (!t) return false
+  if (t.dirty && hasContent(t.doc)) {
+    switchTab(id)
+    if (!(await confirmDiscard())) return false
+  }
+  removeTab(id)
+  return true
+}
+
+/**
+ * Geöffnetes Dokument anzeigen: ein leerer, unveränderter Tab wird wiederverwendet, sonst kommt es in einen neuen Tab.
+ */
+function showDocument(doc: Doc, name: string, path: string | null, dirty: boolean) {
+  const st = getState()
+  if (!st.dirty && !st.filePath && !hasContent(st.doc) && !st.past.length) {
+    replaceDoc(doc, name)
+    setState({ filePath: path, dirty, past: [] })
+  } else openTab({ doc, fileName: name, filePath: path, dirty })
+  setTimeout(() => fitView(1.5), 0)
 }
 
 /** Inhalt einer Datei öffnen: OpenMol-Dokumente (und ChemDraw-CDXML) ersetzen das Dokument, Strukturdateien werden eingefügt */
@@ -313,10 +421,10 @@ export async function openText(fname: string, text: string, path?: string) {
       toast(T('Datei konnte nicht geöffnet werden') + ': ' + (e instanceof Error ? e.message : String(e)), 'error')
       return
     }
-    if (!(await confirmDiscard())) return
-    replaceDoc(normalizeDoc(d), name)
-    filePath = path ?? null
-    setTimeout(() => fitView(1.5), 0)
+    // schon offen: zu diesem Tab wechseln
+    const already = path ? allTabs().find((t) => t.filePath === path) : undefined
+    if (already) return switchTab(already.id)
+    showDocument(normalizeDoc(d), name, path ?? null, false)
     return
   }
   if (/\.cdxml$/i.test(fname)) {
@@ -328,12 +436,8 @@ export async function openText(fname: string, text: string, path?: string) {
       toast(T('ChemDraw-Datei konnte nicht gelesen werden') + ': ' + (e instanceof Error ? e.message : String(e)), 'error')
       return
     }
-    if (!(await confirmDiscard())) return
-    replaceDoc(r.doc, name)
     // kein OpenMol-Dokument: „Speichern“ fragt nach einem Namen (die CDXML-Datei wird nicht überschrieben)
-    filePath = null
-    setState({ dirty: true })
-    setTimeout(() => fitView(1.5), 0)
+    showDocument(r.doc, name, null, true)
     if (r.skipped.length) toast(T('Nicht übernommen') + ': ' + r.skipped.join(', '))
     return
   }

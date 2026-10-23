@@ -27,6 +27,8 @@ export interface DesktopApi {
   readPath: (p: string) => Promise<DesktopFile>
   saveDialog: (opts?: { title?: string; defaultPath?: string; filters?: FileFilter[] }) => Promise<string | null>
   writeFile: (p: string, data: string | Uint8Array) => Promise<boolean>
+  /** HTML (je Blatt ein SVG) als PDF drucken; Seitengröße in Zoll */
+  printPdf: (html: string, size: { width: number; height: number }) => Promise<Uint8Array>
   setDocState: (s: { title: string; dirty: boolean; path?: string }) => void
   closeOk: () => void
   closeCancel: () => void

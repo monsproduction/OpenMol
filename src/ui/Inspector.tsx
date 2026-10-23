@@ -23,9 +23,13 @@ import {
   lookupSelection,
   selectionBold,
   setHighlight,
+  setPageFormat,
+  fitSheet,
+  trimPages,
   toggleBold,
 } from '../tools/actions'
 import { analyzePolymer, polymerUnits, type PolymerUnit } from '../model/polymer'
+import { PAGE_FORMATS } from '../model/pages'
 import { commit, setState, toast, useStore } from '../store'
 import { fmtDec, useSettings } from '../settings'
 import { fmtLetters } from '../i18n/i18n'
@@ -43,6 +47,21 @@ function BgPick({ value, onChange }: { value: string | undefined; onChange: (c: 
         <button key={c} className={'swatch' + (value === c ? ' active' : '')} style={{ background: c }} onClick={() => onChange(c)} aria-label={'Hintergrund ' + c} />
       ))}
       <input type="color" value={value ?? '#ffffff'} onChange={(e) => onChange(e.target.value)} aria-label="Eigene Hintergrundfarbe" />
+    </div>
+  )
+}
+
+const DOC_BG_COLORS = ['#f4f5f7', '#fbf6e9', '#eaf1fb', '#eef7ef', '#1e2026', '#000000']
+
+/** Hintergrund des Dokuments: weiß (Standard) oder eine Farbe – gilt für Zeichenfläche, PNG und SVG */
+function DocBgPick({ value, onChange }: { value: string | undefined; onChange: (c: string | undefined) => void }) {
+  return (
+    <div className="colors">
+      <button className={'swatch' + (!value ? ' active' : '')} style={{ background: '#ffffff' }} onClick={() => onChange(undefined)} data-tip="Weiß (Standard)" aria-label="Weiß (Standard)" />
+      {DOC_BG_COLORS.map((c) => (
+        <button key={c} className={'swatch' + (value === c ? ' active' : '')} style={{ background: c }} onClick={() => onChange(c)} aria-label={'Hintergrund ' + c} />
+      ))}
+      <input type="color" value={value ?? '#ffffff'} onChange={(e) => onChange(e.target.value === '#ffffff' ? undefined : e.target.value)} aria-label="Eigene Hintergrundfarbe" />
     </div>
   )
 }
@@ -201,6 +220,23 @@ function LazyText({ value, onCommit, multiline, placeholder, focusEvent }: { val
   const [v, setV] = useState(value)
   const ref = useRef<HTMLTextAreaElement & HTMLInputElement>(null)
   useEffect(() => setV(value), [value])
+  // wie RichField: Klick außerhalb übernimmt sofort, beim Verschwinden des Feldes wird Getipptes noch übernommen
+  const latest = useRef({ v, value, onCommit })
+  latest.current = { v, value, onCommit }
+  useEffect(() => {
+    const flush = () => {
+      const l = latest.current
+      if (l.v !== l.value) l.onCommit(l.v)
+    }
+    const outside = (e: PointerEvent) => {
+      if (ref.current && document.activeElement === ref.current && !ref.current.contains(e.target as Node)) flush()
+    }
+    document.addEventListener('pointerdown', outside, true)
+    return () => {
+      document.removeEventListener('pointerdown', outside, true)
+      flush()
+    }
+  }, [])
   useEffect(() => {
     if (!focusEvent) return
     const f = () => ref.current?.focus()
@@ -236,6 +272,13 @@ export function Inspector() {
   const texts = sel.texts.map((id) => doc.texts[id]).filter(Boolean)
   const shapes = sel.shapes.map((id) => doc.shapes[id]).filter(Boolean)
   const none = selectionSize(sel) === 0
+  // ganze Moleküle markiert (Doppelklick): Bindungstyp für alle Bindungen auf einmal ist dann nicht sinnvoll
+  const wholeMolecules = useMemo(() => {
+    if (atoms.length < 2) return false
+    const ids = new Set(sel.atoms)
+    const g = getScene(doc).g
+    return sel.atoms.every((id) => (g.adj.get(id) ?? []).every((nb) => ids.has(nb.other.id)))
+  }, [doc, sel.atoms, atoms.length])
 
   const setAtoms = (f: (a: (typeof atoms)[0]) => void) =>
     commit((d) => {
@@ -404,7 +447,7 @@ export function Inspector() {
         </Section>
       )}
 
-      {bonds.length > 0 && (
+      {bonds.length > 0 && !wholeMolecules && (
         <Section id="bond" title={bonds.length === 1 ? 'Bindung' : `${bonds.length} Bindungen`}>
           <Row label="Typ">
             <Seg<BondType>
@@ -1081,6 +1124,48 @@ function DocSettings({ style, setStyle }: { style: DocStyle; setStyle: (p: Parti
       <Row label="Schriftgröße">
         <NumSlider min={10} max={36} step={0.5} inputMin={4} inputMax={96} value={style.fontSize} def={STYLE_PRESETS.standard.style.fontSize} onChange={(v) => setStyle({ fontSize: v })} />
       </Row>
+      <Row label="Hintergrund">
+        <DocBgPick value={style.background} onChange={(c) => setStyle({ background: c })} />
+      </Row>
+      <Row label="Seitenformat">
+        <select
+          value={style.page?.format ?? ''}
+          data-tip="Seitenformat wie in ChemDraw (eine Bindung = 14,4 pt). Mit den „+“ an den Rändern weitere Seiten anbauen; der PDF-Export erzeugt je Seite eine PDF-Seite"
+          onChange={(e) => setPageFormat(e.target.value || null)}
+        >
+          <option value="">Unbegrenzt</option>
+          {PAGE_FORMATS.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+      </Row>
+      {style.page && (
+        <>
+          <Row label="Orientierung">
+            <div className="seg">
+              <button className={!style.page.landscape ? 'active' : ''} data-tip="Hochformat" onClick={() => setPageFormat(style.page!.format, false)}>
+                Hoch
+              </button>
+              <button className={style.page.landscape ? 'active' : ''} data-tip="Querformat" onClick={() => setPageFormat(style.page!.format, true)}>
+                Quer
+              </button>
+            </div>
+          </Row>
+          <Row label="Seiten">
+            <span className="muted small">{style.page.cols * style.page.rows === 1 ? '1 Seite' : `${style.page.cols} × ${style.page.rows} Seiten`}</span>
+          </Row>
+          <div className="cyc-add">
+            <button className="btn small" onClick={trimPages} data-tip="Seiten am Rand ohne Inhalt entfernen">
+              Leere entfernen
+            </button>
+            <button className="btn small" onClick={fitSheet} data-tip="Ansicht auf alle Seiten einpassen">
+              Seiten einpassen
+            </button>
+          </div>
+        </>
+      )}
       <label className="check">
         <input type="checkbox" checked={style.chargeCircle} onChange={(e) => setStyle({ chargeCircle: e.target.checked })} /> Ladungen umkreist (⊕ ⊖)
       </label>

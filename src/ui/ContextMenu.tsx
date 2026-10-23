@@ -9,6 +9,7 @@ import {
   arrange,
   cleanStructure,
   contractGroups,
+  createStoichTable,
   copySelection,
   deleteSelection,
   duplicateSelection,
@@ -115,6 +116,10 @@ function entries(at: { x: number; y: number }, pick: boolean): Entry[] {
     },
     { label: 'Fett', shortcut: K('⌘B'), action: () => void toggleBold() },
     ...(hasAtoms || sel.texts.length ? [highlight] : []),
+    // markierte Reaktion (mit Reaktionspfeil): Ansatztabelle direkt von hier
+    ...(sel.arrows.length
+      ? (['sep', { label: 'Ansatztabelle erstellen', tip: 'Stöchiometrische Ansatztabelle aus der markierten Reaktion', action: createStoichTable }] as Entry[])
+      : []),
     ...(hasAtoms
       ? ([
           'sep',

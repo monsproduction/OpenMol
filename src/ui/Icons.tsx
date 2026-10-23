@@ -63,6 +63,14 @@ const ICONS: Record<string, ReactElement> = {
       </text>
     </g>
   ),
+  chair1: <polygon {...S} points="1.7,6.8 7.6,9.3 13.8,6.8 18.2,14.2 12.7,11.8 6.1,14.1" />,
+  chair2: <polygon {...S} points="18.3,6.8 12.4,9.3 6.2,6.8 1.8,14.2 7.3,11.8 13.9,14.1" />,
+  cyclopentadiene: (
+    <g {...S}>
+      <polygon points="10.0,3.5 16.7,8.3 14.1,16.2 5.9,16.2 3.3,8.3" />
+      <path d="M14.5,9.8 L13.2,13.7 M6.8,13.7 L5.5,9.8" />
+    </g>
+  ),
   benzene: (
     <g {...S}>
       <polygon points={poly(6)} />

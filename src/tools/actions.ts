@@ -22,6 +22,7 @@ import {
   restore2D,
 } from '../model/ops'
 import { getScene, sceneBBox, textBox } from '../model/scene'
+import { PAGE_FORMATS, addPageAt, fitLayout, sheetBox, trimLayout } from '../model/pages'
 import type { ClipData } from '../model/ops'
 import { applyOrder, reorderKeys, type OrderMode } from '../model/order'
 import type { Fragment } from '../model/ocl'
@@ -311,7 +312,7 @@ export function zoomTo(z: number, around?: { sx: number; sy: number }) {
   const sx = around?.sx ?? (el?.clientWidth ?? 800) / 2
   const sy = around?.sy ?? (el?.clientHeight ?? 600) / 2
   if (Number.isNaN(z)) return
-  const nz = Math.min(8, Math.max(0.1, z))
+  const nz = Math.min(8, Math.max(0.04, z))
   const docX = (sx - view.panX) / view.zoom
   const docY = (sy - view.panY) / view.zoom
   setState({ view: { zoom: nz, panX: sx - docX * nz, panY: sy - docY * nz } })
@@ -1192,8 +1193,21 @@ export function createStoichTable() {
   const { doc, sel } = getState()
   const scene = getScene(doc)
   const s = selectionSize(sel) ? completeSel(doc, sel) : null
-  const atomIds = s ? [...selectionAtomIds(doc, s)] : Object.keys(doc.atoms)
   const arrowIds = (s ? s.arrows : Object.keys(doc.arrows)).filter((id) => doc.arrows[id] && doc.arrows[id].kind !== 'resonance' && doc.arrows[id].kind !== 'retro')
+  let atomIds = s ? [...selectionAtomIds(doc, s)] : Object.keys(doc.atoms)
+  // nur ein Pfeil markiert (z. B. per Rechtsklick): die Moleküle dieser Reaktion – auf Höhe des Pfeils – gehören dazu
+  if (s && !atomIds.length && arrowIds.length) {
+    const ar0 = doc.arrows[arrowIds[0]]
+    const len0 = Math.hypot(ar0.x2 - ar0.x1, ar0.y2 - ar0.y1) || 1
+    const n0 = { x: -(ar0.y2 - ar0.y1) / len0, y: (ar0.x2 - ar0.x1) / len0 }
+    const L0 = doc.style.bondLength
+    atomIds = fragments(doc, scene.g, Object.keys(doc.atoms))
+      .filter((f) => {
+        const c = f.reduce((acc, id) => ({ x: acc.x + doc.atoms[id].x / f.length, y: acc.y + doc.atoms[id].y / f.length }), { x: 0, y: 0 })
+        return Math.abs((c.x - ar0.x1) * n0.x + (c.y - ar0.y1) * n0.y) < L0 * 4
+      })
+      .flat()
+  }
   const frs = fragments(doc, scene.g, atomIds).filter((f) => f.length > 0)
   if (!frs.length && !arrowIds.length) return toast('Erst eine Reaktion zeichnen oder markieren (Moleküle und Pfeil)')
   // Pfeil: der längste (bei mehreren Stufen gilt der erste in Leserichtung)
@@ -1235,19 +1249,67 @@ export function createStoichTable() {
     ref.driver = 'mass'
   }
   // unter die Reaktion setzen
-  const all = s ?? { ...emptySelection(), atoms: atomIds, arrows: arrowIds }
   const rb = sceneBBox(scene, {
-    atoms: new Set(all.atoms),
+    atoms: new Set(atomIds),
     bonds: new Set(Object.values(doc.bonds).filter((b) => atomIds.includes(b.a1)).map((b) => b.id)),
     arrows: new Set(arrowIds),
   })
   const L = doc.style.bondLength
   const id = uid('st')
   commit((dd) => {
-    dd.tables[id] = { id, x: rb ? rb.x1 : 0, y: rb ? rb.y2 + L * 1.2 : 0, lang: getSettings().tableLang, rows, temperature, time, atmosphere }
+    dd.tables[id] = { id, x: rb ? rb.x1 : 0, y: rb ? rb.y2 + L * 1.2 : 0, lang: getSettings().uiLang, rows, temperature, time, atmosphere }
   })
   setState({ sel: { ...emptySelection(), tables: [id] }, tableEditor: id })
   toast(ref ? 'Ansatztabelle angelegt – Menge des Bezugsedukts eingeben' : 'Ansatztabelle angelegt')
   // CAS-Nummern und GHS-Symbole gleich im Hintergrund nachschlagen
   void import('./safety').then((m) => m.fillSafety(id, { quiet: true, auto: true }))
+}
+
+// ---------- Seitenlayout ----------
+
+/** Seitenformat wählen (null = unbegrenzte Zeichenfläche); die Seiten legen sich um die Zeichnung */
+export function setPageFormat(format: string | null, landscape?: boolean) {
+  const { doc } = getState()
+  if (!format) {
+    commit((d) => {
+      delete d.style.page
+    })
+    return
+  }
+  const f = PAGE_FORMATS.find((x) => x.id === format)
+  const lay = fitLayout(doc, format, landscape ?? !!f?.landscape, viewCenter())
+  commit((d) => {
+    d.style.page = lay
+  })
+  fitSheet()
+}
+
+/** weitere Seite an einem Rand anbauen (große „+“-Knöpfe) */
+export function addPage(side: 'top' | 'bottom' | 'left' | 'right') {
+  commit((d) => {
+    if (d.style.page) d.style.page = addPageAt(d.style.page, side)
+  })
+}
+
+/** leere Seiten am Rand entfernen */
+export function trimPages() {
+  const { doc } = getState()
+  if (!doc.style.page) return
+  const t = trimLayout(doc, doc.style.page)
+  commit((d) => {
+    d.style.page = t
+  })
+}
+
+/** Ansicht auf alle Seiten einpassen */
+export function fitSheet() {
+  const { doc } = getState()
+  const el = document.querySelector('.canvas-wrap') as HTMLElement | null
+  if (!el || !doc.style.page) return
+  const b = sheetBox(doc.style.page)
+  const w = el.clientWidth
+  const h = el.clientHeight
+  const z = Math.min(3, Math.max(0.02, Math.min((w - 160) / (b.x2 - b.x1), (h - 160) / (b.y2 - b.y1))))
+  const c = mid({ x: b.x1, y: b.y1 }, { x: b.x2, y: b.y2 })
+  setState({ view: { zoom: z, panX: w / 2 - c.x * z, panY: h / 2 - c.y * z } })
 }

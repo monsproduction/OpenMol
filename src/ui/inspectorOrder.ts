@@ -5,6 +5,7 @@ import { lsGet, lsSet } from '../storage'
 
 /** alle Kategorien in der ursprünglichen Reihenfolge */
 export const SECTION_IDS = [
+  'reaction',
   'docstyle',
   'structure',
   'atom',
@@ -15,7 +16,6 @@ export const SECTION_IDS = [
   'shape',
   'cycle',
   'table',
-  'reaction',
   'ringfill',
   'color',
   'analysis',
@@ -27,6 +27,18 @@ let order: SectionId[] = load()
 const listeners = new Set<() => void>()
 
 function load(): SectionId[] {
+  const out = loadSaved()
+  // seit 1.3.0 steht „Reaktion“ (Ansatztabelle erstellen) ganz oben – auch in einer früher gespeicherten Reihenfolge
+  if (lsGet(KEY + ':reaction-top') !== '1') {
+    const next = ['reaction' as SectionId, ...out.filter((x) => x !== 'reaction')]
+    lsSet(KEY + ':reaction-top', '1')
+    if (lsGet(KEY)) lsSet(KEY, JSON.stringify(next))
+    return next
+  }
+  return out
+}
+
+function loadSaved(): SectionId[] {
   try {
     const v = JSON.parse(lsGet(KEY) ?? '[]')
     const saved = Array.isArray(v) ? v.filter((x): x is SectionId => (SECTION_IDS as readonly string[]).includes(x)) : []

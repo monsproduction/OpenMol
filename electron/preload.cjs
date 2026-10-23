@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('openmol', {
   readPath: (p) => ipcRenderer.invoke('openmol:read-path', p),
   saveDialog: (opts) => ipcRenderer.invoke('openmol:save-dialog', opts),
   writeFile: (p, data) => ipcRenderer.invoke('openmol:write-file', p, data),
+  printPdf: (html, size) => ipcRenderer.invoke('openmol:print-pdf', html, size),
   setDocState: (s) => ipcRenderer.send('openmol:doc-state', s),
   closeOk: () => ipcRenderer.send('openmol:close-ok'),
   closeCancel: () => ipcRenderer.send('openmol:close-cancel'),

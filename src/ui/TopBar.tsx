@@ -56,16 +56,27 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div className="brand">
-        <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+        {/* App-Icon (wie build/icon.svg, ohne Schatten) */}
+        <svg width="26" height="26" viewBox="100 100 824 824" aria-hidden="true">
           <defs>
-            <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#4f7cff" />
-              <stop offset="1" stopColor="#7a5cff" />
+            <linearGradient id="om-logo-bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stopColor="#5ca6fa" />
+              <stop offset="0.5" stopColor="#2f6be3" />
+              <stop offset="1" stopColor="#153a9f" />
             </linearGradient>
           </defs>
-          <rect width="26" height="26" rx="7" fill="url(#lg)" />
-          <polygon points="13,5.5 19.5,9.25 19.5,16.75 13,20.5 6.5,16.75 6.5,9.25" fill="none" stroke="#fff" strokeWidth="1.8" strokeLinejoin="round" />
-          <path d="M9.2 10.6L13 8.4M17.6 12.2v5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" />
+          <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#om-logo-bg)" />
+          <g fill="none" stroke="#fff" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M730 448 L730 662 L499 795 L268 662 L268 395 L499 261 L575 305" strokeWidth="44" />
+            <path d="M499 383 L499 531 M499 531 L371 604 M499 531 L627 604" strokeWidth="26" />
+          </g>
+          <g fill="#fff">
+            <circle cx="499" cy="383" r="34" />
+            <circle cx="499" cy="531" r="46" />
+            <circle cx="371" cy="604" r="42" />
+            <circle cx="627" cy="604" r="42" />
+            <path d="M724 252 C731 301 751 319 802 326 C751 333 731 351 724 400 C717 351 697 333 646 326 C697 319 717 301 724 252 Z" stroke="#fff" strokeWidth="14" strokeLinejoin="round" />
+          </g>
         </svg>
         <span className="brand-name">OpenMol</span>
         <input
@@ -81,9 +92,9 @@ export function TopBar() {
         />
       </div>
       <div className="top-group">
-        <Btn icon="new" title="Neu" onClick={newDocument} />
-        <Btn icon="open" title="Öffnen (⌘O) – Dokument, Molfile oder SMILES" onClick={openFile} />
-        <Btn icon="save" title="Speichern (⌘S)" onClick={saveDocument} />
+        <Btn icon="new" title="Neu" onClick={() => void newDocument()} />
+        <Btn icon="open" title="Öffnen (⌘O) – Dokument, Molfile oder SMILES" onClick={() => void openFile()} />
+        <Btn icon="save" title="Speichern (⌘S)" onClick={() => void saveDocument()} />
         <div className="top-sep" />
         <Btn icon="import" title="Struktur importieren (SMILES, Molfile, Name)" label="Import" onClick={() => setState({ dialog: 'import' })} />
         <Btn icon="export" title="Exportieren (⌘E)" label="Export" onClick={() => setState({ dialog: 'export' })} />

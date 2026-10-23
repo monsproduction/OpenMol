@@ -3,7 +3,7 @@ import { produce, setAutoFreeze } from 'immer'
 import { useSyncExternalStore } from 'react'
 import type { ClipData } from './model/ops'
 import type { Doc, Id, Selection } from './model/types'
-import { emptyDoc, emptySelection, normalizeDoc } from './model/types'
+import { emptyDoc, emptySelection, normalizeDoc, uid } from './model/types'
 
 setAutoFreeze(false)
 
@@ -46,10 +46,15 @@ export type Hover =
   | { kind: 'table'; id: Id }
   | null
 
+/** ChemDraw-Hotspot: Atom bzw. Bindung, an dem die nächste Hotkey-Taste wirkt (grüner Punkt) */
+export type Hotspot = { kind: 'atom'; id: Id } | { kind: 'bond'; id: Id } | null
+
 export interface ToolOpts {
   bondType: import('./model/types').BondType
   ringSize: number
   ringAromatic: boolean
+  /** Ringform: regelmäßig (ringSize) oder feste Form (Sessel, Cyclopentadien) */
+  ringKind: import('./model/ops').RingKind
   element: string
   label: string | null
   arrowKind: import('./model/types').ArrowKind
@@ -97,6 +102,7 @@ export interface State {
   future: Doc[]
   view: View
   hover: Hover
+  hotspot: Hotspot
   editing: Editing | null
   toast: { msg: string; kind: 'info' | 'error'; t: number } | null
   dialog: null | 'import' | 'periodic' | 'help' | 'templates' | 'export' | 'saveTemplate' | 'settings'
@@ -111,9 +117,30 @@ export interface State {
   inspectorHidden: boolean
   fileName: string
   dirty: boolean
+  /** gespeicherte Datei des aktiven Dokuments (Desktop-App; „Speichern“ schreibt ohne Dialog dorthin) */
+  filePath: string | null
+  /** alle offenen Dokumente (Tabs) in Anzeigereihenfolge – der Eintrag des aktiven Tabs ist nur ein Platzhalter,
+   *  seine Daten liegen oben im Zustand (doc, past, future …) */
+  tabs: TabData[]
+  activeTab: Id
+}
+
+/** ein offenes Dokument mit eigenem Verlauf, eigener Auswahl und Ansicht */
+export interface TabData {
+  id: Id
+  doc: Doc
+  past: Doc[]
+  future: Doc[]
+  sel: Selection
+  view: View
+  fileName: string
+  dirty: boolean
+  filePath: string | null
 }
 
 const AUTOSAVE_KEY = 'openmol:autosave'
+/** Inhalte der übrigen Tabs für die Wiederherstellung nach einem Absturz */
+const AUTOSAVE_TABS_KEY = 'openmol:autosave:tabs'
 
 function loadAutosave(): Doc | null {
   try {
@@ -135,14 +162,43 @@ function loadName(): string {
   }
 }
 
+/**
+ * Zeichnung aus der automatischen Sicherung – nur, wenn OpenMol beim letzten Mal nicht ordentlich beendet wurde
+ * (Absturz) und sie Inhalt hat. Beim normalen Start beginnt OpenMol mit einem leeren Dokument.
+ */
+export function crashRecovery(): { doc: Doc; name: string }[] | null {
+  if (lsGet(SESSION_KEY) !== '1') return null
+  const out: { doc: Doc; name: string }[] = []
+  const d = loadAutosave()
+  if (d && hasContent(d)) out.push({ doc: d, name: loadName() })
+  try {
+    const rest = JSON.parse(lsGet(AUTOSAVE_TABS_KEY) || '[]') as { doc: Doc; name: string }[]
+    for (const t of rest) if (t?.doc?.atoms && t.doc.style) out.push({ doc: normalizeDoc(t.doc), name: t.name || 'Unbenannt' })
+  } catch {
+    // beschädigte Sicherung der übrigen Tabs – nur das aktive Dokument wiederherstellen
+  }
+  return out.length ? out : null
+}
+
+export function hasContent(d: Doc): boolean {
+  return (['atoms', 'texts', 'arrows', 'curved', 'shapes', 'cycles', 'tables'] as const).some((k) => Object.keys(d[k] ?? {}).length)
+}
+
+/** „Sitzung läuft“ (1) bzw. „ordentlich beendet“ (0) – Grundlage für die Wiederherstellung nach einem Absturz */
+const SESSION_KEY = 'openmol:session-open'
+export function markSession(open: boolean) {
+  lsSet(SESSION_KEY, open ? '1' : '0')
+}
+
 let state: State = {
-  doc: loadAutosave() ?? emptyDoc(),
+  doc: emptyDoc(),
   sel: emptySelection(),
   tool: 'bond',
   opts: {
     bondType: 'single',
     ringSize: 6,
     ringAromatic: true,
+    ringKind: 'regular',
     element: 'N',
     label: null,
     arrowKind: 'reaction',
@@ -164,6 +220,7 @@ let state: State = {
   future: [],
   view: { zoom: 1, panX: 0, panY: 0 },
   hover: null,
+  hotspot: null,
   editing: null,
   toast: null,
   dialog: null,
@@ -177,9 +234,14 @@ let state: State = {
       return false
     }
   })(),
-  fileName: loadName(),
+  fileName: 'Unbenannt',
   dirty: false,
+  filePath: null,
+  tabs: [],
+  activeTab: '',
 }
+state.activeTab = uid('tab')
+state.tabs = [snapshot(state, state.activeTab)]
 
 const listeners = new Set<() => void>()
 let saveTimer: number | undefined
@@ -208,17 +270,31 @@ export function useStore<T>(sel: (s: State) => T): T {
   return useSyncExternalStore(subscribe, () => sel(state))
 }
 
+function saveNow() {
+  window.clearTimeout(saveTimer)
+  saveTimer = undefined
+  try {
+    lsSet(AUTOSAVE_KEY, JSON.stringify(state.doc))
+    lsSet(AUTOSAVE_KEY + ':name', state.fileName)
+  } catch {
+    // Speicher voll oder gesperrt – Autosave ist nur eine Komfortfunktion
+  }
+}
+
 function scheduleSave() {
   window.clearTimeout(saveTimer)
-  saveTimer = window.setTimeout(() => {
-    try {
-      lsSet(AUTOSAVE_KEY, JSON.stringify(state.doc))
-      lsSet(AUTOSAVE_KEY + ':name', state.fileName)
-    } catch {
-      // Speicher voll oder gesperrt – Autosave ist nur eine Komfortfunktion
-    }
-  }, 400)
+  saveTimer = window.setTimeout(saveNow, 400)
 }
+
+// Geht das Fenster in den Hintergrund, sofort sichern: verdeckte Fenster bremsen Timer stark aus, die verzögerte
+// Sicherung käme sonst womöglich erst spät (wichtig für die Wiederherstellung nach einem Absturz)
+const flushSave = () => {
+  if (saveTimer !== undefined) saveNow()
+}
+window.addEventListener('blur', flushSave)
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) flushSave()
+})
 
 const MAX_HISTORY = 200
 
@@ -327,12 +403,112 @@ export function replaceDoc(doc: Doc, fileName?: string) {
     past: [...state.past, state.doc],
     future: [],
     sel: emptySelection(),
+    hotspot: null,
     editing: null,
     fileName: fileName ?? state.fileName,
     dirty: false,
   }
   scheduleSave()
   emit()
+}
+
+// ---------- Tabs ----------
+
+function snapshot(s: State, id: Id): TabData {
+  return { id, doc: s.doc, past: s.past, future: s.future, sel: s.sel, view: s.view, fileName: s.fileName, dirty: s.dirty, filePath: s.filePath }
+}
+
+/** alle Tabs mit aktuellem Stand (auch des aktiven) */
+export function allTabs(): TabData[] {
+  return state.tabs.map((t) => (t.id === state.activeTab ? snapshot(state, t.id) : t))
+}
+
+/** Tab-Daten in den Zustand laden (vorübergehende Zustände wie Hover, Bearbeiten, Menüs enden) */
+function load(tabs: TabData[], t: TabData) {
+  if (txBase) {
+    state = { ...state, doc: txBase }
+    txBase = null
+  }
+  state = {
+    ...state,
+    tabs,
+    activeTab: t.id,
+    doc: t.doc,
+    past: t.past,
+    future: t.future,
+    sel: t.sel,
+    view: t.view,
+    fileName: t.fileName,
+    dirty: t.dirty,
+    filePath: t.filePath,
+    hover: null,
+    hotspot: null,
+    editing: null,
+    contextMenu: null,
+    tableEditor: null,
+  }
+  scheduleSave()
+  saveOtherTabs()
+  emit()
+}
+
+/** neuen Tab hinter dem aktiven öffnen (leer oder mit einem Dokument) und aktivieren */
+export function openTab(init: { doc?: Doc; fileName?: string; filePath?: string | null; dirty?: boolean } = {}) {
+  const tabs = allTabs()
+  const t: TabData = {
+    id: uid('tab'),
+    doc: init.doc ?? emptyDoc(),
+    past: [],
+    future: [],
+    sel: emptySelection(),
+    view: { ...state.view },
+    fileName: init.fileName ?? 'Unbenannt',
+    dirty: init.dirty ?? false,
+    filePath: init.filePath ?? null,
+  }
+  tabs.splice(tabs.findIndex((x) => x.id === state.activeTab) + 1, 0, t)
+  load(tabs, t)
+}
+
+export function switchTab(id: Id) {
+  if (id === state.activeTab) return
+  const tabs = allTabs()
+  const t = tabs.find((x) => x.id === id)
+  if (t) load(tabs, t)
+}
+
+/** Nachbar-Tab aktivieren (+1 = nächster, −1 = vorheriger; am Ende geht es vorn weiter) */
+export function cycleTab(step: number) {
+  const i = state.tabs.findIndex((t) => t.id === state.activeTab)
+  const n = state.tabs.length
+  if (n > 1) switchTab(state.tabs[(i + step + n) % n].id)
+}
+
+/** Tab ohne Rückfrage entfernen; der letzte Tab wird durch ein leeres Dokument ersetzt */
+export function removeTab(id: Id) {
+  const all = allTabs()
+  const i = all.findIndex((t) => t.id === id)
+  if (i < 0) return
+  const tabs = all.filter((t) => t.id !== id)
+  if (!tabs.length) {
+    const t: TabData = { id: uid('tab'), doc: emptyDoc(), past: [], future: [], sel: emptySelection(), view: state.view, fileName: 'Unbenannt', dirty: false, filePath: null }
+    load([t], t)
+  } else if (id === state.activeTab) load(tabs, tabs[Math.min(i, tabs.length - 1)])
+  else {
+    state = { ...state, tabs }
+    saveOtherTabs()
+    emit()
+  }
+}
+
+/** Inhalte der nicht aktiven Tabs sichern (sie ändern sich nur beim Wechseln, Öffnen oder Schließen) */
+function saveOtherTabs() {
+  try {
+    const rest = state.tabs.filter((t) => t.id !== state.activeTab && hasContent(t.doc)).map((t) => ({ name: t.fileName, doc: t.doc }))
+    lsSet(AUTOSAVE_TABS_KEY, JSON.stringify(rest))
+  } catch {
+    // Speicher voll oder gesperrt – Autosave ist nur eine Komfortfunktion
+  }
 }
 
 export function pruneSel(s: Selection, d: Doc): Selection {

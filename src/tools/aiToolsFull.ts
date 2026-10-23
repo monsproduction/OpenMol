@@ -597,6 +597,7 @@ export async function runFullTool(name: string, a: Args): Promise<unknown | unde
         if (typeof a.show_all_carbons === 'boolean') s.showCarbons = a.show_all_carbons
         if (typeof a.circle_charges === 'boolean') s.chargeCircle = a.circle_charges
         if (typeof a.show_cip === 'boolean') s.showCip = a.show_cip
+        if (typeof a.background === 'string') s.background = a.background && a.background !== '#ffffff' ? a.background : undefined
       })
       return json(doc().style)
     }

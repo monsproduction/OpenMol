@@ -8,6 +8,7 @@ import * as scene from './model/scene'
 import * as types from './model/types'
 import { startDesktop } from './desktopApp'
 import { startFileDrop } from './fileDrop'
+import { startSession } from './session'
 
 // Nur in der Entwicklung: Zugriff für Tests über die Browser-Konsole
 if (import.meta.env.DEV) {
@@ -17,6 +18,7 @@ if (import.meta.env.DEV) {
 // Desktop-App: Menüleiste, Dateien, Fenster (im Browser ohne Wirkung)
 startDesktop()
 startFileDrop()
+startSession()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

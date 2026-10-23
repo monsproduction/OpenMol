@@ -9,8 +9,8 @@ import { getScene, sceneBBox } from '../model/scene'
 import { computeTable, lookupRowCas, parseQty, rowFromName, rowMW } from '../model/stoich'
 import { richPlain } from '../model/richtext'
 import type { Arrow, ArrowKind, Doc, Id, Selection, StoichRole, StoichRow, StoichTable } from '../model/types'
-import { STYLE_PRESETS, emptyDoc, emptySelection, uid } from '../model/types'
-import { commit, getState, redo, replaceDoc, setState, undo } from '../store'
+import { STYLE_PRESETS, emptySelection, uid } from '../model/types'
+import { commit, getState, openTab, redo, setState, undo } from '../store'
 import { cleanStructure, completeSel, contractGroups, createStoichTable, fitView, insertStructureText, selectAll } from './actions'
 import { cleanReaction } from './cleanup'
 import { buildCdxml } from './cdxml'
@@ -332,8 +332,9 @@ async function runTool(name: string, a: Args): Promise<unknown> {
       return { image: await blobToBase64(blob), mimeType: 'image/png', text: imageDescription(doc(), !!a.only_selection) }
     }
     case 'new_document': {
-      replaceDoc(emptyDoc(), str(a.name) ?? 'Unbenannt')
-      return { text: 'Neues, leeres Dokument angelegt (mit undo zurückholbar).' }
+      // in einem neuen Tab – das bisherige Dokument bleibt im alten Tab offen
+      openTab({ fileName: str(a.name) ?? 'Unbenannt' })
+      return { text: 'Neues, leeres Dokument in einem neuen Tab angelegt (das bisherige Dokument bleibt im anderen Tab offen).' }
     }
     case 'insert_structure': {
       const smiles = await resolveStructure(String(a.structure ?? ''))

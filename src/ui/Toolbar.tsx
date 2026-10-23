@@ -97,7 +97,14 @@ const RAIL: (RailItem | 'sep')[] = [
   { tools: ['chain'], icon: 'chain', title: 'Kette', key: 'K' },
   {
     tools: ['ring'],
-    icon: (s) => (s.opts.ringSize === 6 && s.opts.ringAromatic ? 'benzene' : 'ring' + s.opts.ringSize),
+    icon: (s) =>
+      s.opts.ringKind === 'chair1' || s.opts.ringKind === 'chair2'
+        ? s.opts.ringKind
+        : s.opts.ringKind === 'cp'
+          ? 'cyclopentadiene'
+          : s.opts.ringSize === 6 && s.opts.ringAromatic
+            ? 'benzene'
+            : 'ring' + s.opts.ringSize,
     title: 'Ringe',
     key: 'R',
   },
@@ -303,7 +310,7 @@ export function OptionsBar() {
           )}
         </>
       )
-      hint = 'Klick = Atom/Bindung · Doppelklick = ganzes Molekül · Ziehen verschiebt die Auswahl · rastet magnetisch ein (⌘ = aus) · Enter = Atom beschriften · runder Griff = drehen'
+      hint = 'Klick = Atom/Bindung · Doppelklick = ganzes Molekül · Ziehen verschiebt die Auswahl · rastet magnetisch ein (⌘ = aus) · Enter = Hotspot für ChemDraw-Tasten (2× Enter = Atom beschriften) · ⌥+Pfeiltasten = drehen · runder Griff = drehen'
       break
     case 'bond':
       content = BOND_TYPES.map((b) => (
@@ -322,11 +329,14 @@ export function OptionsBar() {
               key={n}
               icon={'ring' + n}
               title={['Cyclopropan', 'Cyclobutan', 'Cyclopentan', 'Cyclohexan', 'Cycloheptan', 'Cyclooctan'][n - 3]}
-              active={opts.ringSize === n && !(n === 6 && opts.ringAromatic)}
-              onClick={() => setTool('ring', { ringSize: n, ringAromatic: false })}
+              active={opts.ringKind === 'regular' && opts.ringSize === n && !(n === 6 && opts.ringAromatic)}
+              onClick={() => setTool('ring', { ringSize: n, ringAromatic: false, ringKind: 'regular' })}
             />
           ))}
-          <OptBtn icon="benzene" title="Benzol" active={opts.ringSize === 6 && opts.ringAromatic} onClick={() => setTool('ring', { ringSize: 6, ringAromatic: true })} />
+          <OptBtn icon="chair1" title="Cyclohexan (Sessel)" active={opts.ringKind === 'chair1'} onClick={() => setTool('ring', { ringKind: 'chair1' })} />
+          <OptBtn icon="chair2" title="Cyclohexan (Sessel, gespiegelt)" active={opts.ringKind === 'chair2'} onClick={() => setTool('ring', { ringKind: 'chair2' })} />
+          <OptBtn icon="cyclopentadiene" title="Cyclopentadien" active={opts.ringKind === 'cp'} onClick={() => setTool('ring', { ringKind: 'cp' })} />
+          <OptBtn icon="benzene" title="Benzol" active={opts.ringKind === 'regular' && opts.ringSize === 6 && opts.ringAromatic} onClick={() => setTool('ring', { ringSize: 6, ringAromatic: true, ringKind: 'regular' })} />
         </>
       )
       hint = 'Klick ins Leere = Ring · auf Atom = Spiro/angefügt · auf Bindung = ankondensiert'

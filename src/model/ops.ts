@@ -242,6 +242,96 @@ function ringPts(center: Pt, n: number, R: number, startAngle: number): Pt[] {
   return Array.from({ length: n }, (_, i) => add(center, fromAngle(startAngle + (i * 2 * Math.PI) / n, R)))
 }
 
+/**
+ * Ringe mit fester Form (nicht regelmäßig): Sesselkonformationen von Cyclohexan in beiden Ausrichtungen, wie in
+ * ChemDraw gezeichnet (Eckpunkte in Bindungslängen, um den Schwerpunkt). Spiegelbild = zweiter Sessel.
+ */
+const CHAIR: Pt[] = [[-1.149, -0.515], [-0.338, -0.16], [0.524, -0.515], [1.132, 0.519], [0.372, 0.174], [-0.54, 0.498]].map(([x, y]) => ({ x, y }))
+export type RingKind = 'regular' | 'chair1' | 'chair2' | 'cp'
+export function ringShape(kind: RingKind): Pt[] | null {
+  if (kind === 'chair1') return CHAIR
+  if (kind === 'chair2') return CHAIR.map((p) => ({ x: -p.x, y: p.y })).reverse()
+  return null
+}
+
+/**
+ * Ring mit fester Form platzieren: ins Leere am Klickpunkt; an eine Bindung mit einer Kante (Form wird gedreht,
+ * auf die Bindungslänge skaliert und zur freien Seite gelegt); an ein Atom mit einer Ecke (Form zeigt vom Molekül weg).
+ */
+export function planShapedRing(d: Doc, g: Graph, shape: Pt[], target: { type: 'point'; p: Pt } | { type: 'atom'; id: Id } | { type: 'bond'; id: Id }, cursor?: Pt): RingPlan {
+  const L = d.style.bondLength
+  let pts: Pt[]
+  if (target.type === 'point') {
+    pts = shape.map((q) => add(target.p, mul(q, L)))
+  } else if (target.type === 'bond') {
+    const b = d.bonds[target.id]
+    const a1 = d.atoms[b.a1]
+    const a2 = d.atoms[b.a2]
+    // Seite wie bei regelmäßigen Ringen: dorthin, wo weniger Nachbarn liegen (sonst Seite des Mauszeigers)
+    const m = mid(a1, a2)
+    const nrm = perp(norm(sub(a2, a1)))
+    let score = 0
+    for (const id of [a1.id, a2.id])
+      for (const nb of g.adj.get(id) ?? []) {
+        if (nb.other.id === a1.id || nb.other.id === a2.id) continue
+        score += Math.sign((nb.other.x - m.x) * nrm.x + (nb.other.y - m.y) * nrm.y)
+      }
+    let side = score > 0 ? -1 : 1
+    if (score === 0 && cursor) side = Math.sign((cursor.x - m.x) * nrm.x + (cursor.y - m.y) * nrm.y) || 1
+    // Ansatzkante: die Kante, von der aus die Form am weitesten zu einer Seite reicht (beim Sessel eine der steilen
+    // Seitenkanten) – sonst läuft die Form entlang der Bindung weiter und trifft Nachbaratome
+    let k = 0
+    let far = -1
+    for (let i = 0; i < shape.length; i++) {
+      const p0 = shape[i]
+      const e = sub(shape[(i + 1) % shape.length], p0)
+      const dLine = Math.abs(e.x * -p0.y - e.y * -p0.x) / Math.hypot(e.x, e.y)
+      if (dLine > far) {
+        far = dLine
+        k = i
+      }
+    }
+    const rolled = [...shape.slice(k), ...shape.slice(0, k)]
+    // Kante 0→1 der (umsortierten) Form auf die Bindung legen; von beiden Spiegelungen die mit Schwerpunkt auf der gewählten Seite
+    let bestPts: Pt[] = []
+    for (const flip of [1, -1]) {
+      const sh = rolled.map((q) => ({ x: q.x, y: q.y * flip }))
+      const e = sub(sh[1], sh[0])
+      const t = sub(a2, a1)
+      const s = Math.hypot(t.x, t.y) / Math.hypot(e.x, e.y)
+      const rot = Math.atan2(t.y, t.x) - Math.atan2(e.y, e.x)
+      const c = Math.cos(rot)
+      const si = Math.sin(rot)
+      const tp = sh.map((q) => {
+        const v = sub(q, sh[0])
+        return add(a1, { x: (v.x * c - v.y * si) * s, y: (v.x * si + v.y * c) * s })
+      })
+      const cen = tp.reduce((acc, q) => add(acc, mul(q, 1 / tp.length)), { x: 0, y: 0 })
+      if (Math.sign((cen.x - m.x) * nrm.x + (cen.y - m.y) * nrm.y) === side || !bestPts.length) bestPts = tp
+    }
+    pts = bestPts
+    pts[0] = { x: a1.x, y: a1.y }
+    pts[1] = { x: a2.x, y: a2.y }
+  } else {
+    const a = d.atoms[target.id]
+    const nbs = g.adj.get(a.id) ?? []
+    let ang = nbs.length === 0 ? (cursor && dist(cursor, a) > 4 ? angleOf(sub(cursor, a)) : -Math.PI / 2) : bestBondAngle(g, a)
+    if (nbs.length === 1) ang = angleOf(sub(a, nbs[0].other))
+    // Ecke 0 der Form auf das Atom, Schwerpunkt der Form in Richtung ang
+    const c0 = shape[0]
+    const rot = ang - Math.atan2(-c0.y, -c0.x)
+    const c = Math.cos(rot)
+    const si = Math.sin(rot)
+    pts = shape.map((q) => {
+      const v = sub(q, c0)
+      return add(a, { x: (v.x * c - v.y * si) * L, y: (v.x * si + v.y * c) * L })
+    })
+    pts[0] = { x: a.x, y: a.y }
+  }
+  const existing = pts.map((p) => atomNear(d, p, L * 0.3)?.id ?? null)
+  return { pts, existing }
+}
+
 export function planRing(d: Doc, g: Graph, n: number, target: { type: 'point'; p: Pt } | { type: 'atom'; id: Id } | { type: 'bond'; id: Id }, cursor?: Pt): RingPlan {
   const L = d.style.bondLength
   const R = L / (2 * Math.sin(Math.PI / n))
@@ -291,7 +381,8 @@ export function planRing(d: Doc, g: Graph, n: number, target: { type: 'point'; p
   return { pts, existing }
 }
 
-export function placeRing(d: Doc, plan: RingPlan, aromatic: boolean): Id[] {
+/** aromatic: Benzol (Kekulé-Muster); pattern: feste Doppelbindungen je Kante i→i+1 (z. B. Cyclopentadien) */
+export function placeRing(d: Doc, plan: RingPlan, aromatic: boolean, fixed?: boolean[]): Id[] {
   const ids = plan.pts.map((p, i) => plan.existing[i] ?? addAtom(d, p.x, p.y).id)
   const n = ids.length
   const g = buildGraph(d)
@@ -324,6 +415,7 @@ export function placeRing(d: Doc, plan: RingPlan, aromatic: boolean): Id[] {
     }
     pattern = best
   }
+  if (fixed) pattern = fixed
   for (let i = 0; i < n; i++) {
     const a = ids[i]
     const b = ids[(i + 1) % n]

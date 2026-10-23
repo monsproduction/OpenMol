@@ -325,6 +325,20 @@ export interface DocStyle {
   depth3d?: boolean
   /** R/S an allen Stereozentren anzeigen */
   showCip?: boolean
+  /** Hintergrundfarbe des Dokuments (Zeichenfläche und Export); fehlt sie, ist der Hintergrund weiß */
+  background?: string
+  /** Seitenlayout (A4, PowerPoint …); fehlt es, ist die Zeichenfläche unbegrenzt */
+  page?: PageLayout
+}
+
+/** Raster gleich großer Seiten: linke obere Ecke x/y (Dokument-Einheiten), Spalten × Zeilen (siehe model/pages.ts) */
+export interface PageLayout {
+  format: string
+  landscape?: boolean
+  x: number
+  y: number
+  cols: number
+  rows: number
 }
 
 // ---------- Ansatztabelle (Stöchiometrie) ----------
@@ -513,6 +527,9 @@ export function normalizeDoc(raw: Partial<Doc>): Doc {
     style: { ...base.style, ...obj(raw.style, base.style) },
   }
   const ok = (n: unknown) => typeof n === 'number' && Number.isFinite(n)
+  const pg = d.style.page
+  if (pg && (typeof pg.format !== 'string' || !ok(pg.x) || !ok(pg.y) || !(pg.cols >= 1) || !(pg.rows >= 1))) delete d.style.page
+  else if (pg) d.style.page = { ...pg, cols: Math.min(50, Math.round(pg.cols)), rows: Math.min(50, Math.round(pg.rows)) }
   for (const id in d.atoms) {
     const a = d.atoms[id]
     if (!a || !ok(a.x) || !ok(a.y)) delete d.atoms[id]

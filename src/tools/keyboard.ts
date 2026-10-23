@@ -1,8 +1,8 @@
-import { deleteItems, linearizeTriples, translateSelection } from '../model/ops'
+import { deleteItems, translateSelection } from '../model/ops'
 import { emptySelection, selectionSize } from '../model/types'
 import type { Doc, Id } from '../model/types'
 import { parseRich, serializeRich, type Run } from '../model/richtext'
-import { clipboard, commit, getState, redo, setState, setTool, toggleInspector, undo } from '../store'
+import { clipboard, commit, getState, redo, setState, setTool, toggleInspector, undo, type Hotspot } from '../store'
 import {
   arrange,
   toggleBold,
@@ -13,11 +13,14 @@ import {
   fitView,
   insertStructureText,
   pasteInternal,
+  rotate,
+  rotate3D,
   selectAll,
   toggle3D,
   viewCenter,
 } from './actions'
 import { cleanReaction } from './cleanup'
+import { ATOM_KEYS, BOND_KEYS, atomHotkey, bondHotkey, grabHotspot, hotspotFromSelection, liveHotspot, moveHotspot, reactionShortcut, selectHotspotMolecule } from './hotkeys'
 import { openFile, saveDocument } from './io'
 
 const ELEMENT_KEYS: Record<string, string> = {
@@ -53,9 +56,39 @@ function setElement(d: Doc, ids: Id[], el: string) {
   }
 }
 
+const ARROW_DIR: Record<string, { x: number; y: number }> = {
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 },
+}
+
 let lastPointer: { x: number; y: number } | null = null
+/** Mausposition beim Setzen des Hotspots: bewegt sich die Maus deutlich weg, endet der Hotspot – dann gelten die
+ *  Buchstaben wieder als Werkzeug-Tasten (A = Pfeil, V = Auswahl …). Beim Tippen von Sequenzen steht die Maus still. */
+let hotspotAnchor: { x: number; y: number } | null = null
+const HOTSPOT_MOVE_PX = 48
+
 export function trackPointer(p: { x: number; y: number } | null) {
   lastPointer = p
+  const st = getState()
+  if (!st.hotspot || !p) return
+  if (!hotspotAnchor) hotspotAnchor = p
+  else if (Math.hypot(p.x - hotspotAnchor.x, p.y - hotspotAnchor.y) * st.view.zoom > HOTSPOT_MOVE_PX) {
+    hotspotAnchor = null
+    setState({ hotspot: null })
+  }
+}
+
+/** Objekt unter der Maus beim Setzen des Hotspots */
+let hoverAtSet: string | null = null
+const hoverKey = (h: Hotspot) => (h ? h.kind + ':' + h.id : null)
+
+function setHotspot(h: Hotspot) {
+  hotspotAnchor = lastPointer
+  const hv = getState().hover
+  hoverAtSet = hv?.kind === 'atom' || hv?.kind === 'bond' ? hoverKey({ kind: hv.kind, id: hv.id }) : null
+  setState({ hotspot: h })
 }
 
 export function handleKeyDown(e: KeyboardEvent) {
@@ -68,6 +101,12 @@ export function handleKeyDown(e: KeyboardEvent) {
 
   if (mod) {
     const lk = k.toLowerCase()
+    // ⌘ + Pfeiltaste: Reaktions-Kürzel (Kopie der markierten Moleküle hinter einem neuen Reaktionspfeil, wie ChemDraw)
+    if (k.startsWith('Arrow') && !e.shiftKey && !e.altKey && st.sel.atoms.length) {
+      e.preventDefault()
+      reactionShortcut(ARROW_DIR[k])
+      return
+    }
     // Anordnung wie in Keynote: ⇧⌘F/⇧⌘B ganz nach vorn/hinten, mit ⌥ eine Ebene (über e.code, da ⌥ die Taste verändert)
     if (e.shiftKey && (e.code === 'KeyF' || e.code === 'KeyB') && selectionSize(st.sel)) {
       e.preventDefault()
@@ -143,19 +182,36 @@ export function handleKeyDown(e: KeyboardEvent) {
   }
 
   const hover = st.hover
-  // ---- Tasten über einem Atom ----
-  if (hover?.kind === 'atom' && !e.altKey) {
-    const id = hover.id
-    const lower = k.length === 1 ? k.toLowerCase() : k
-    if (ELEMENT_KEYS[lower] && k.length === 1) {
+  // ---- ChemDraw-Hotkeys: über einem Atom/einer Bindung oder – ohne Auswahl – am Hotspot. Steht die Maus noch über
+  // demselben Objekt wie beim Setzen des Hotspots, gilt der Hotspot (so lassen sich Sequenzen wie „a1o“ tippen) ----
+  const hs = selectionSize(st.sel) ? null : liveHotspot(st.doc, st.hotspot)
+  const hoverObj: Hotspot = hover?.kind === 'atom' || hover?.kind === 'bond' ? { kind: hover.kind, id: hover.id } : null
+  const overAtomOrBond = !!hoverObj && (!hs || hoverKey(hoverObj) !== hoverAtSet)
+  const tgt: Hotspot = overAtomOrBond ? hoverObj : hs
+  if (tgt && !e.altKey && k.length === 1) {
+    if (k === 'g') {
+      // „grab“: Atom bzw. Bindung markieren
       e.preventDefault()
-      // b = Brom, Umschalt+B = Bor; Umschalt+C = Chlor
-      const el = e.shiftKey && lower === 'c' ? 'Cl' : e.shiftKey && lower === 'b' ? 'B' : ELEMENT_KEYS[lower]
-      commit((d) => setElement(d, [id], el))
+      grabHotspot(tgt)
       return
     }
-    if (/^[a-zA-Z]$/.test(k)) {
-      // andere Buchstaben: genau dieser Buchstabe als Beschriftung (z. B. R für einen Rest, X, A, Z …)
+    const keys = tgt.kind === 'atom' ? ATOM_KEYS : BOND_KEYS
+    if (keys.has(k)) {
+      e.preventDefault()
+      let next: Hotspot | false = false
+      commit((d) => {
+        next = tgt.kind === 'atom' ? atomHotkey(d, tgt.id, k) : bondHotkey(d, tgt.id, k)
+      })
+      if (next !== false) setHotspot(next)
+      return
+    }
+  }
+  // ---- weitere Tasten über einem Atom (bzw. am Hotspot-Atom) ----
+  const atomTgt = tgt?.kind === 'atom' ? tgt.id : null
+  if (atomTgt && !e.altKey) {
+    const id = atomTgt
+    if (overAtomOrBond && /^[a-zA-Z]$/.test(k)) {
+      // andere Buchstaben: genau dieser Buchstabe als Beschriftung (z. B. R für einen Rest, X, T …)
       e.preventDefault()
       const letter = k.toUpperCase()
       commit((d) => {
@@ -166,6 +222,7 @@ export function handleKeyDown(e: KeyboardEvent) {
         a.literal = undefined
         a.showC = undefined
       })
+      setHotspot({ kind: 'atom', id })
       return
     }
     if (k === '*') {
@@ -204,10 +261,10 @@ export function handleKeyDown(e: KeyboardEvent) {
       setState({ editing: { kind: 'atom', id } })
       return
     }
-    if (k === 'Delete' || k === 'Backspace') {
+    if ((k === 'Delete' || k === 'Backspace') && overAtomOrBond) {
       e.preventDefault()
       commit((d) => deleteItems(d, { ...emptySelection(), atoms: [id] }))
-      setState({ hover: null })
+      setState({ hover: null, hotspot: null })
       return
     }
   }
@@ -222,30 +279,12 @@ export function handleKeyDown(e: KeyboardEvent) {
       return
     }
   }
-  // ---- Tasten über einer Bindung ----
-  if (hover?.kind === 'bond') {
-    const id = hover.id
-    const map: Record<string, 'single' | 'double' | 'triple' | 'wedge' | 'hash'> = { '1': 'single', '2': 'double', '3': 'triple', w: 'wedge', h: 'hash' }
-    const bt = map[k.toLowerCase()]
-    if (bt) {
-      e.preventDefault()
-      commit((d) => {
-        const b = d.bonds[id]
-        if ((bt === 'wedge' || bt === 'hash') && b.type === bt) {
-          const tmp = b.a1
-          b.a1 = b.a2
-          b.a2 = tmp
-        } else b.type = bt
-        linearizeTriples(d, [b.a1, b.a2])
-      })
-      return
-    }
-    if (k === 'Delete' || k === 'Backspace') {
-      e.preventDefault()
-      commit((d) => deleteItems(d, { ...emptySelection(), bonds: [id] }))
-      setState({ hover: null })
-      return
-    }
+  // ---- Entf über einer Bindung ----
+  if (hover?.kind === 'bond' && (k === 'Delete' || k === 'Backspace')) {
+    e.preventDefault()
+    commit((d) => deleteItems(d, { ...emptySelection(), bonds: [hover.id] }))
+    setState({ hover: null, hotspot: null })
+    return
   }
 
   // ---- Allgemein ----
@@ -268,23 +307,53 @@ export function handleKeyDown(e: KeyboardEvent) {
     }
     return
   }
-  if (k === 'Enter' && st.sel.atoms.length === 1 && !hover) {
-    // ausgewähltes Atom beschriften
+  if (k === 'Enter' && !hover) {
+    // Molekül → Hotspot (wie ChemDraw): aus der Auswahl wird der Hotspot; am Hotspot-Atom: Beschriftung bearbeiten
+    if (selectionSize(st.sel)) {
+      const next = hotspotFromSelection(st.doc, st.sel)
+      if (next) {
+        e.preventDefault()
+        setState({ sel: emptySelection() })
+        setHotspot(next)
+        return
+      }
+    } else if (hs?.kind === 'atom') {
+      e.preventDefault()
+      setState({ editing: { kind: 'atom', id: hs.id } })
+      return
+    }
+  }
+  if ((k === ' ' || k === 'Tab') && hs && !e.repeat) {
+    // Hotspot → Molekül: ganzes Molekül markieren
     e.preventDefault()
-    setState({ editing: { kind: 'atom', id: st.sel.atoms[0] } })
+    selectHotspotMolecule()
     return
   }
   if (k === 'Escape') {
-    setState({ sel: emptySelection(), editing: null })
+    setState({ sel: emptySelection(), editing: null, hotspot: null })
     if (st.tool !== 'select') setTool('select')
     return
   }
   if (k.startsWith('Arrow') && selectionSize(st.sel)) {
     e.preventDefault()
-    const step = e.shiftKey ? 10 : 1
-    const dx = k === 'ArrowLeft' ? -step : k === 'ArrowRight' ? step : 0
-    const dy = k === 'ArrowUp' ? -step : k === 'ArrowDown' ? step : 0
-    commit((d) => translateSelection(d, st.sel, dx, dy))
+    const dir = ARROW_DIR[k]
+    if (e.altKey && e.shiftKey) {
+      // ⇧⌥ + Pfeiltaste: echte 3D-Drehung (←/→ um die senkrechte, ↑/↓ um die waagerechte Achse)
+      if (dir.x) rotate3D('y', 15 * dir.x)
+      else rotate3D('x', -15 * dir.y)
+    } else if (e.altKey) {
+      // ⌥ + ←/→: um 15° drehen, ⌥ + ↑/↓: um 1° (Feinjustierung)
+      rotate(dir.x ? 15 * dir.x : dir.y)
+    } else {
+      const step = e.shiftKey ? 10 : 1
+      commit((d) => translateSelection(d, st.sel, dir.x * step, dir.y * step))
+    }
+    return
+  }
+  if (k.startsWith('Arrow') && hs) {
+    // Hotspot zwischen Atomen und Bindungen weiterbewegen
+    e.preventDefault()
+    setState({ hotspot: moveHotspot(st.doc, hs, ARROW_DIR[k]) })
     return
   }
   if (e.altKey) return
@@ -320,7 +389,7 @@ export function handleKeyDown(e: KeyboardEvent) {
       break
     case 'r':
     case 'R':
-      setTool('ring', { ringSize: 6, ringAromatic: true })
+      setTool('ring', { ringSize: 6, ringAromatic: true, ringKind: 'regular' })
       break
     case 'a':
     case 'A':

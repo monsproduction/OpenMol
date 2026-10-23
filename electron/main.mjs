@@ -190,19 +190,49 @@ const TEST_DIR = process.env.OPENMOL_TEST_DIALOGS
 const testDialogs = TEST_DIR
   ? {
       open: () => (process.env.OPENMOL_TEST_OPEN ? { canceled: false, filePaths: [process.env.OPENMOL_TEST_OPEN] } : { canceled: true, filePaths: [] }),
-      save: (opts) => ({ canceled: false, filePath: path.join(TEST_DIR, path.basename(opts.defaultPath ?? 'Unbenannt')) }),
-      confirm: () => ({ response: Number(fs.existsSync(path.join(TEST_DIR, 'confirm.txt')) ? fs.readFileSync(path.join(TEST_DIR, 'confirm.txt'), 'utf8') : 0) }),
+      save: (opts) => {
+        console.log('[test-dialog] save', path.basename(opts.defaultPath ?? ''))
+        return { canceled: false, filePath: path.join(TEST_DIR, path.basename(opts.defaultPath ?? 'Unbenannt')) }
+      },
+      confirm: (opts) => {
+        console.log('[test-dialog] confirm', opts?.message ?? '', '|', (opts?.detail ?? '').replace(/\n/g, ' / '))
+        return { response: Number(fs.existsSync(path.join(TEST_DIR, 'confirm.txt')) ? fs.readFileSync(path.join(TEST_DIR, 'confirm.txt'), 'utf8') : 0) }
+      },
     }
   : null
+
+// Datei-Dialoge beginnen im zuletzt benutzten Ordner (Öffnen, Speichern und Export gemeinsam)
+const dirFile = () => path.join(app.getPath('userData'), 'dialogs.json')
+let lastDir = null
+function startDir() {
+  if (!lastDir) {
+    try {
+      lastDir = JSON.parse(fs.readFileSync(dirFile(), 'utf8')).lastDir ?? null
+    } catch {
+      lastDir = null
+    }
+  }
+  return lastDir && fs.existsSync(lastDir) ? lastDir : app.getPath('documents')
+}
+function rememberDir(file) {
+  lastDir = path.dirname(file)
+  try {
+    fs.writeFileSync(dirFile(), JSON.stringify({ lastDir }))
+  } catch {
+    // ohne Schreibrecht: nur für diese Sitzung
+  }
+}
 
 function registerIpc() {
   ipcMain.handle('openmol:open-dialog', async (_e, opts = {}) => {
     const r = testDialogs ? testDialogs.open() : await dialog.showOpenDialog(win, {
       title: opts.title ?? 'Öffnen',
+      defaultPath: startDir(),
       properties: ['openFile'],
       filters: opts.filters ?? FILTERS.open,
     })
     if (r.canceled || !r.filePaths[0]) return null
+    rememberDir(r.filePaths[0])
     return readDoc(allow(r.filePaths[0]))
   })
 
@@ -214,12 +244,33 @@ function registerIpc() {
   ipcMain.handle('openmol:save-dialog', async (_e, opts = {}) => {
     const o = {
       title: opts.title ?? 'Speichern',
-      defaultPath: opts.defaultPath ? path.join(opts.dir ?? app.getPath('documents'), opts.defaultPath) : undefined,
+      defaultPath: path.join(opts.dir ?? startDir(), opts.defaultPath ?? ''),
       filters: opts.filters ?? FILTERS.doc,
     }
     const r = testDialogs ? testDialogs.save(o) : await dialog.showSaveDialog(win, o)
     if (r.canceled || !r.filePath) return null
+    rememberDir(r.filePath)
     return allow(r.filePath)
+  })
+
+  // PDF: die Oberfläche liefert eine HTML-Seite mit je einem SVG pro Blatt; ein unsichtbares Fenster ohne JavaScript
+  // druckt sie als Vektor-PDF (Schriften eingebettet). Gespeichert wird danach über den normalen Speichern-Dialog.
+  ipcMain.handle('openmol:print-pdf', async (_e, html, size) => {
+    const w = Number(size?.width)
+    const h = Number(size?.height)
+    if (typeof html !== 'string' || html.length > 200e6 || !(w > 0.5 && w < 200) || !(h > 0.5 && h < 200)) throw new Error('ungültige Seite')
+    const tmp = path.join(app.getPath('temp'), `openmol-pdf-${process.pid}-${Date.now()}.html`)
+    await fs.promises.writeFile(tmp, html, 'utf8')
+    const pw = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true, contextIsolation: true, nodeIntegration: false } })
+    pw.webContents.on('will-navigate', (e) => e.preventDefault())
+    try {
+      await pw.loadFile(tmp)
+      const buf = await pw.webContents.printToPDF({ pageSize: { width: w, height: h }, margins: { marginType: 'none' }, printBackground: true, preferCSSPageSize: true })
+      return new Uint8Array(buf)
+    } finally {
+      pw.destroy()
+      fs.promises.rm(tmp, { force: true }).catch(() => {})
+    }
   })
 
   ipcMain.handle('openmol:write-file', async (_e, p, data) => {
@@ -298,7 +349,7 @@ function registerIpc() {
   })
 
   ipcMain.handle('openmol:confirm', async (_e, opts) => {
-    const r = testDialogs ? testDialogs.confirm() : await dialog.showMessageBox(win, {
+    const r = testDialogs ? testDialogs.confirm(opts) : await dialog.showMessageBox(win, {
       type: opts.type ?? 'question',
       message: opts.message,
       detail: opts.detail,

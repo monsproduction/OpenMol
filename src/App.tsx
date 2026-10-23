@@ -5,7 +5,7 @@ import { startAiBridge, stopAiBridge } from './tools/aiBridge'
 import { useEffect } from 'react'
 import { exampleCycle, exampleEsterification, exampleScheme, exampleSN2 } from './model/examples'
 import { Canvas } from './render/Canvas'
-import { replaceDoc, setState, setTool, useStore } from './store'
+import { getState, replaceDoc, setState, setTool, useStore } from './store'
 import { fitView } from './tools/actions'
 import { handleKeyDown, handlePaste } from './tools/keyboard'
 import { Dialogs, useFitOnFirstLoad } from './ui/Dialogs'
@@ -13,6 +13,7 @@ import { Icon } from './ui/Icons'
 import { Inspector } from './ui/Inspector'
 import { OptionsBar, Rail, useToolHint } from './ui/Toolbar'
 import { TopBar } from './ui/TopBar'
+import { TabBar } from './ui/TabBar'
 import { Tooltip } from './ui/Tooltip'
 import { ContextMenu } from './ui/ContextMenu'
 import { desktop } from './desktop'
@@ -49,7 +50,7 @@ function EmptyState() {
       <h1>Leere Zeichenfläche</h1>
       <p>Klicke mit dem Bindungswerkzeug irgendwo hin, um anzufangen – oder:</p>
       <div className="empty-actions">
-        <button className="btn" onClick={() => setTool('ring', { ringSize: 6, ringAromatic: true })}>
+        <button className="btn" onClick={() => setTool('ring', { ringSize: 6, ringAromatic: true, ringKind: 'regular' })}>
           <Icon name="benzene" size={18} /> Benzolring zeichnen
         </button>
         <button className="btn" onClick={() => setState({ dialog: 'import' })}>
@@ -135,17 +136,24 @@ export default function App() {
     }
   }, [])
   useEffect(() => {
+    // jeder Klick (Zeichenfläche, Werkzeugleiste …) beendet den ChemDraw-Hotspot
+    const endHotspot = () => {
+      if (getState().hotspot) setState({ hotspot: null })
+    }
     window.addEventListener('keydown', handleKeyDown)
     window.addEventListener('paste', handlePaste)
+    window.addEventListener('pointerdown', endHotspot, true)
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
       window.removeEventListener('paste', handlePaste)
+      window.removeEventListener('pointerdown', endHotspot, true)
     }
   }, [])
   return (
     // Sprachwechsel: Oberfläche neu aufbauen (Zustand liegt im Store und bleibt erhalten)
     <div className="app" key={uiLang}>
       <TopBar />
+      <TabBar />
       <div className="main">
         <Rail />
         <div className="center">

@@ -14,6 +14,8 @@
   --danger: #e5484d;
   --canvas: #ffffff;
   --grid-dot: #dfe3ea;
+  --page-backdrop: #dde1e8;
+  --page-edge: #9aa3b2;
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
   --shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.16), 0 2px 6px rgba(16, 24, 40, 0.08);
   --radius: 10px;
@@ -36,6 +38,8 @@
   --accent-text: #9cb8ff;
   --canvas: #fdfdfe;
   --grid-dot: #e1e4ea;
+  --page-backdrop: #2a2e36;
+  --page-edge: #8b93a1;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
@@ -95,6 +99,146 @@ textarea {
   display: flex;
   flex-direction: column;
   height: 100%;
+}
+
+/* ---------- Seitenlayout: „+“ an den Rändern ---------- */
+
+.page-plus g {
+  cursor: pointer;
+}
+
+.page-plus circle {
+  fill: var(--panel);
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+  filter: drop-shadow(0 1px 2px rgba(16, 24, 40, 0.18));
+}
+
+.page-plus path {
+  stroke: var(--text-2);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+}
+
+.page-plus g:hover circle {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.page-plus g:hover path {
+  stroke: #fff;
+}
+
+/* ---------- Tabs (mehrere Dokumente) ---------- */
+
+.tabbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 34px;
+  padding: 4px 8px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.doc-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 1 200px;
+  min-width: 96px;
+  height: 29px;
+  padding: 0 6px 0 12px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  color: var(--text-2);
+  cursor: default;
+  user-select: none;
+}
+
+.doc-tab:hover {
+  background: var(--panel-2);
+}
+
+.doc-tab.active {
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--border);
+  margin-bottom: -1px;
+  height: 30px;
+}
+
+.doc-tab-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.doc-tab-close {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-3);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.doc-tab-close:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
+.doc-tab-close .x {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.doc-tab-close .dot {
+  display: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-2);
+}
+
+.doc-tab-close.dirty .dot,
+.doc-tab-close.dirty:hover .x {
+  display: block;
+}
+
+.doc-tab-close.dirty .x,
+.doc-tab-close.dirty:hover .dot {
+  display: none;
+}
+
+.doc-tab-new {
+  align-self: center;
+  width: 26px;
+  height: 24px;
+  margin-left: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.doc-tab-new:hover {
+  background: var(--panel-2);
+  color: var(--text);
 }
 
 /* ---------- Kopfleiste ---------- */
@@ -2162,14 +2306,52 @@ code {
   width: 84px;
 }
 
-.settings-grid {
+/* Einstellungen: zweispaltig, Gruppen mit kleiner Überschrift, Erklärungen als Tooltip (ⓘ) */
+.settings-rows {
   display: grid;
-  gap: 8px;
-  min-width: 360px;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 18px;
+  align-items: center;
+  min-width: 460px;
 }
 
-.settings-grid .field-label {
-  margin-top: 8px;
+.set-group {
+  grid-column: 1 / -1;
+  margin: 10px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.set-group:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+.set-label {
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.set-info {
+  margin-left: 5px;
+  font-size: 11px;
+  color: var(--text-3);
+  cursor: help;
+}
+
+.set-ctrl {
+  min-width: 0;
+}
+
+.set-note {
+  grid-column: 2;
+  margin: -2px 0 0;
 }
 
 .ai-pill {
