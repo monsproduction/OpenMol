@@ -6,7 +6,7 @@ import { toMolfile, toSmiles } from '../model/ocl'
 import { getScene, sceneBBox } from '../model/scene'
 import { PT_PER_UNIT, pageRects } from '../model/pages'
 import type { Doc } from '../model/types'
-import { normalizeDoc, selectionSize } from '../model/types'
+import { normalizeDoc, safeColor, selectionSize } from '../model/types'
 import { DocContent } from '../render/DocSvg'
 import { allTabs, getState, openTab, removeTab, replaceDoc, setState, switchTab, toast } from '../store'
 import { fitView, insertStructureText } from './actions'
@@ -105,7 +105,9 @@ export function exportSvgString(doc: Doc, opts: { onlySelection?: boolean; paddi
   const w = Math.ceil(box.x2 - box.x1 + 2 * pad)
   const h = Math.ceil(box.y2 - box.y1 + 2 * pad)
   const inner = innerMarkup(scene)
-  const bg = opts.background ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${opts.background}"/>` : ''
+  // Farbe wird von Hand ins SVG geschrieben – nur geprüfte Farbangaben (sonst ließe sich über eine Datei Code einschleusen)
+  const bgc = safeColor(opts.background)
+  const bg = bgc ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${bgc}"/>` : ''
   const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${x} ${y} ${w} ${h}">${bg}${inner}</svg>`
   return { svg, w, h }
 }
@@ -216,7 +218,7 @@ export function pdfHtml(doc: Doc): { html: string; width: number; height: number
     pages = [{ x: box.x1 - pad, y: box.y1 - pad, w: box.x2 - box.x1 + 2 * pad, h: box.y2 - box.y1 + 2 * pad }]
   }
   const inner = innerMarkup(scene)
-  const bg = doc.style.background ?? '#ffffff'
+  const bg = safeColor(doc.style.background) ?? '#ffffff'
   const W = +(pages[0].w * PT_PER_UNIT).toFixed(2)
   const H = +(pages[0].h * PT_PER_UNIT).toFixed(2)
   const sheets = pages.map(

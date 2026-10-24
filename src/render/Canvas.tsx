@@ -76,6 +76,7 @@ import {
   toast,
   useStore,
   type Hover,
+  registerEditFlush,
   type View,
 } from '../store'
 import { trackPointer } from '../tools/keyboard'
@@ -237,14 +238,24 @@ export function applyAtomText(d: Doc, id: Id, raw: string) {
     a.showC = undefined
     return
   }
-  const withCharge = /^([A-Za-z]{1,2})([+\-−])$/.exec(v)
+  // Element mit Ladung: Na+, Cl−, Fe3+, Cu2+, O2− (auch Fe+3)
+  const withCharge = /^([A-Za-z]{1,2})(\d?)([+\-−])(\d?)$/.exec(v)
+  // Symbol wie getippt (CO2− bleibt die Gruppe, nicht Cobalt); ganz klein geschrieben wird großgeschrieben (na+ → Na+)
+  const chRaw = withCharge?.[1] ?? ''
+  const chEl = SYMBOL_SET.has(chRaw) ? chRaw : chRaw === chRaw.toLowerCase() ? chRaw.charAt(0).toUpperCase() + chRaw.slice(1) : ''
+  // Isotop vor dem Symbol: 13C, 2H, 18O, 15N
+  const iso = /^(\d{1,3})([A-Z][a-z]?)$/.exec(v)
   if (SYMBOL_SET.has(v) || (SYMBOL_SET.has(cap) && v.length <= 2 && v === v.toLowerCase())) {
     a.element = SYMBOL_SET.has(v) ? v : cap
     a.label = undefined
-  } else if (withCharge && SYMBOL_SET.has(withCharge[1].charAt(0).toUpperCase() + withCharge[1].slice(1).toLowerCase())) {
-    a.element = withCharge[1].charAt(0).toUpperCase() + withCharge[1].slice(1).toLowerCase()
+  } else if (withCharge && SYMBOL_SET.has(chEl) && !(withCharge[2] && withCharge[4])) {
+    a.element = chEl
     a.label = undefined
-    a.charge = withCharge[2] === '+' ? 1 : -1
+    a.charge = (withCharge[3] === '+' ? 1 : -1) * Number(withCharge[2] || withCharge[4] || 1)
+  } else if (iso && SYMBOL_SET.has(iso[2]) && Number(iso[1]) > 0) {
+    a.element = iso[2]
+    a.label = undefined
+    a.isotope = Number(iso[1])
   } else {
     // selbst eingetippt: genau so anzeigen (auch chemisch „falsche“ Formeln wie H3C an einem CH2)
     a.label = v
@@ -2192,6 +2203,9 @@ function AtomInlineEditor({ id }: { id: Id }) {
   const ref = useRef<HTMLDivElement>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const done = useRef(false)
+  // vor einem Tab-Wechsel sofort übernehmen (siehe registerEditFlush)
+  const flushRef = useRef(() => {})
+  useEffect(() => registerEditFlush(() => flushRef.current()), [])
   const initial = useRef(atom ? atomEditorHtml(atom) : '')
   useEffect(() => {
     const el = ref.current
@@ -2205,6 +2219,7 @@ function AtomInlineEditor({ id }: { id: Id }) {
     s?.addRange(r)
   }, [])
   if (!atom) return null
+  flushRef.current = () => finish(true)
   const finish = (apply: boolean) => {
     if (done.current) return
     done.current = true
@@ -2260,6 +2275,9 @@ function CycleLabelEditor({ id, kind, part }: { id: Id; kind: 'station' | 'branc
   const ref = useRef<HTMLDivElement>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const done = useRef(false)
+  // vor einem Tab-Wechsel sofort übernehmen (siehe registerEditFlush)
+  const flushRef = useRef(() => {})
+  useEffect(() => registerEditFlush(() => flushRef.current()), [])
   const read = () =>
     (kind === 'station'
       ? c?.stations[Number(part)]?.label
@@ -2303,6 +2321,7 @@ function CycleLabelEditor({ id, kind, part }: { id: Id; kind: 'station' | 'branc
     if (!b) return null
     pos = branchLabelPos(doc, c, b)
   }
+  flushRef.current = () => finish()
   const finish = () => {
     if (done.current) return
     done.current = true
@@ -2374,6 +2393,9 @@ function ArrowTextInlineEditor({ id, which }: { id: Id; which: 'above' | 'below'
   const ref = useRef<HTMLDivElement>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const done = useRef(false)
+  // vor einem Tab-Wechsel sofort übernehmen (siehe registerEditFlush)
+  const flushRef = useRef(() => {})
+  useEffect(() => registerEditFlush(() => flushRef.current()), [])
   const initial = useRef(ar?.[which] ?? '')
   useEffect(() => {
     const el = ref.current
@@ -2389,6 +2411,7 @@ function ArrowTextInlineEditor({ id, which }: { id: Id; which: 'above' | 'below'
   if (!ar) return null
   const blk = arrowTextBlock(doc, ar, which)
   const size = arrowTextOpts(doc).size
+  flushRef.current = () => finish()
   const finish = () => {
     if (done.current) return
     done.current = true
@@ -2459,6 +2482,9 @@ function TextInlineEditor({ id, fresh }: { id: Id; fresh: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   const wrap = useRef<HTMLDivElement>(null)
   const done = useRef(false)
+  // vor einem Tab-Wechsel sofort übernehmen (siehe registerEditFlush)
+  const flushRef = useRef(() => {})
+  useEffect(() => registerEditFlush(() => flushRef.current()), [])
   const initial = useRef(t?.text ?? '')
   useEffect(() => {
     const el = ref.current
@@ -2474,6 +2500,7 @@ function TextInlineEditor({ id, fresh }: { id: Id; fresh: boolean }) {
     }
   }, [fresh])
   if (!t) return null
+  flushRef.current = () => finish()
   const finish = () => {
     if (done.current) return
     done.current = true

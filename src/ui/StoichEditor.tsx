@@ -23,6 +23,12 @@ import { Icon } from './Icons'
 import { GHS_NAMES, GhsIcon } from '../render/Ghs'
 import { fillSafety } from '../tools/safety'
 
+/** Zahl > 0 aus einer Eingabe (sonst null) – für Äquivalente, Molmasse, Dichte */
+const positive = (v: string): number | null => {
+  const x = parseNum(v)
+  return x !== null && x > 0 ? x : null
+}
+
 const T = {
   de: {
     title: 'Ansatztabelle',
@@ -337,7 +343,7 @@ export function StoichEditor() {
       </span>
     ) : (
       <>
-        <Cell value={num(mw, 2)} width={64} onCommit={(v) => updateRow(t.id, r.id, (rr) => (rr.mw = parseNum(v) ?? undefined))} />
+        <Cell value={num(mw, 2)} width={64} onCommit={(v) => updateRow(t.id, r.id, (rr) => (rr.mw = positive(v) ?? (v.trim() ? rr.mw : undefined)))} />
         <Unit u="g/mol" />
       </>
     )
@@ -419,7 +425,8 @@ export function StoichEditor() {
                         onCommit={(v) =>
                           updateRow(t.id, r.id, (rr) => {
                             const x = parseNum(v)
-                            if (x === null) return
+                            // Äquivalente nur positiv (0 oder negativ ergäbe unsinnige Mengen)
+                            if (x === null || x <= 0) return
                             rr.eq = x
                             rr.driver = 'eq'
                           })
@@ -454,7 +461,7 @@ export function StoichEditor() {
                         updateRow(t.id, r.id, (rr) => {
                           const m = /^\s*([\d.,]+)\s*(?:g\/mL|g\/ml|g\/cm3)?\s*$/.exec(v)
                           if (!v.trim()) rr.density = undefined
-                          else if (m) rr.density = parseNum(m[1]) ?? rr.density
+                          else if (m) rr.density = positive(m[1]) ?? rr.density
                         })
                       }
                     />
@@ -548,7 +555,7 @@ export function StoichEditor() {
                     <td className="l">{ghsCell(r)}</td>
                     <td>{mwCell(r, info, c.mw)}</td>
                     <td>
-                      <Cell value={num(c.eq, 2)} width={52} onCommit={(v) => updateRow(t.id, r.id, (rr) => (rr.eq = parseNum(v) ?? undefined))} />
+                      <Cell value={num(c.eq, 2)} width={52} onCommit={(v) => updateRow(t.id, r.id, (rr) => (rr.eq = positive(v) ?? (v.trim() ? rr.eq : undefined)))} />
                       <Unit u={S.eqUnit} />
                     </td>
                     <td className="qty">

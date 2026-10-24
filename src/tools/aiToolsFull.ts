@@ -9,7 +9,7 @@ import { applyRingFill, perceiveRings, ringSystem } from '../model/rings'
 import { curvedGeom, getScene, sceneBBox } from '../model/scene'
 import { TEMPLATE_GROUPS } from '../model/templates'
 import type { Anchor, Atom, BondType, Cycle, Doc, Id, RingFill, Selection, Shape, ShapeKind } from '../model/types'
-import { CLOSED_SHAPES, emptySelection, uid } from '../model/types'
+import { CLOSED_SHAPES, FONTS, emptySelection, safeColor, uid } from '../model/types'
 import { findUserTemplate, getUserLib } from '../model/userlib'
 import { commit, getState, setState } from '../store'
 import type { OrderMode } from '../model/order'
@@ -45,7 +45,8 @@ import { translateSelection } from '../model/ops'
 
 type Args = Record<string, unknown>
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
-const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
+// Zahlen nur in vernünftiger Größe (eine KI kann z. B. 1e308 schicken – damit rechnet nichts mehr richtig)
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e7 ? v : undefined)
 const doc = () => getState().doc
 const json = (v: unknown) => ({ text: JSON.stringify(v, null, 1) })
 
@@ -471,7 +472,10 @@ export async function runFullTool(name: string, a: Args): Promise<unknown | unde
       const r = num(a.radius) ?? L * 4
       const cx = num(a.cx) ?? (all ? all.x2 + r + L * 2 : 0)
       const cy = num(a.cy) ?? (all ? (all.y1 + all.y2) / 2 : 0)
-      const st = (a.stations as { label?: string; angle?: number; structure?: string }[]) ?? []
+      // Stationen als Liste; einzelne Texte werden zu Stationen mit diesem Namen
+      const st: { label?: string; angle?: number; structure?: string }[] = (Array.isArray(a.stations) ? a.stations : typeof a.stations === 'string' ? [a.stations] : [])
+        .map((x) => (typeof x === 'string' ? { label: x } : x && typeof x === 'object' ? x : null))
+        .filter((x): x is { label?: string; angle?: number; structure?: string } => !!x)
       const c: Cycle = newCycle(cx, cy, r, st.length, a.direction === 'ccw' ? 'ccw' : 'cw')
       if (num(a.ry)) c.ry = num(a.ry)!
       st.forEach((s, i) => {
@@ -589,15 +593,23 @@ export async function runFullTool(name: string, a: Args): Promise<unknown | unde
     case 'set_document_style': {
       commit((d) => {
         const s = d.style
-        if (num(a.line_width)) s.lineWidth = num(a.line_width)!
-        if (num(a.font_size)) s.fontSize = num(a.font_size)!
-        if (str(a.font)) s.font = str(a.font)!
-        if (num(a.bond_length)) s.bondLength = num(a.bond_length)!
+        // nur sinnvolle Werte übernehmen (gleiche Grenzen wie beim Öffnen einer Datei)
+        const lw = num(a.line_width)
+        const fs = num(a.font_size)
+        const bl = num(a.bond_length)
+        if (lw !== undefined && lw >= 0.1 && lw <= 20) s.lineWidth = lw
+        if (fs !== undefined && fs >= 2 && fs <= 200) s.fontSize = fs
+        if (bl !== undefined && bl >= 5 && bl <= 400) s.bondLength = bl
+        if (str(a.font) && FONTS.some((f) => f.name === str(a.font))) s.font = str(a.font)!
         if (typeof a.color_heteroatoms === 'boolean') s.colorAtoms = a.color_heteroatoms
         if (typeof a.show_all_carbons === 'boolean') s.showCarbons = a.show_all_carbons
         if (typeof a.circle_charges === 'boolean') s.chargeCircle = a.circle_charges
         if (typeof a.show_cip === 'boolean') s.showCip = a.show_cip
-        if (typeof a.background === 'string') s.background = a.background && a.background !== '#ffffff' ? a.background : undefined
+        if (typeof a.background === 'string') {
+          const c = safeColor(a.background)
+          if (!a.background.trim() || c === '#ffffff') s.background = undefined
+          else if (c) s.background = c
+        }
       })
       return json(doc().style)
     }

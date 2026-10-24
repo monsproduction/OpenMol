@@ -397,6 +397,7 @@ export function redo() {
 }
 
 export function replaceDoc(doc: Doc, fileName?: string) {
+  flushEditing()
   state = {
     ...state,
     doc,
@@ -413,6 +414,21 @@ export function replaceDoc(doc: Doc, fileName?: string) {
 }
 
 // ---------- Tabs ----------
+
+/** offener Editor auf der Zeichenfläche (Text, Beschriftung …): vor einem Dokumentwechsel sofort übernehmen – sonst
+ *  speichert er erst nach dem Wechsel und schriebe ins falsche Dokument */
+let editFlush: (() => void) | null = null
+export function registerEditFlush(f: () => void): () => void {
+  editFlush = f
+  return () => {
+    if (editFlush === f) editFlush = null
+  }
+}
+function flushEditing() {
+  const f = editFlush
+  editFlush = null
+  f?.()
+}
 
 function snapshot(s: State, id: Id): TabData {
   return { id, doc: s.doc, past: s.past, future: s.future, sel: s.sel, view: s.view, fileName: s.fileName, dirty: s.dirty, filePath: s.filePath }
@@ -454,6 +470,7 @@ function load(tabs: TabData[], t: TabData) {
 
 /** neuen Tab hinter dem aktiven öffnen (leer oder mit einem Dokument) und aktivieren */
 export function openTab(init: { doc?: Doc; fileName?: string; filePath?: string | null; dirty?: boolean } = {}) {
+  flushEditing()
   const tabs = allTabs()
   const t: TabData = {
     id: uid('tab'),
@@ -472,6 +489,7 @@ export function openTab(init: { doc?: Doc; fileName?: string; filePath?: string 
 
 export function switchTab(id: Id) {
   if (id === state.activeTab) return
+  flushEditing()
   const tabs = allTabs()
   const t = tabs.find((x) => x.id === id)
   if (t) load(tabs, t)
@@ -486,6 +504,7 @@ export function cycleTab(step: number) {
 
 /** Tab ohne Rückfrage entfernen; der letzte Tab wird durch ein leeres Dokument ersetzt */
 export function removeTab(id: Id) {
+  flushEditing()
   const all = allTabs()
   const i = all.findIndex((t) => t.id === id)
   if (i < 0) return

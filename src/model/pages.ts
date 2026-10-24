@@ -1,28 +1,10 @@
 // Seitenlayouts wie in ChemDraw: ein Raster gleich großer Seiten (Spalten × Zeilen). Maßstab wie ChemDraw:
 // 1 Dokument-Einheit = 0,36 pt, eine Bindung (40 Einheiten) = 14,4 pt, A4 = 1654 × 2339 Einheiten.
 import { getScene, sceneBBox } from './scene'
-import type { Doc, PageLayout } from './types'
+import { MAX_PAGES, PAGE_FORMATS, type Doc, type PageLayout } from './types'
 
 export const PT_PER_UNIT = 0.36
-const mm = (v: number) => (v * 72) / 25.4
-const inch = (v: number) => v * 72
-
-/** Formate in pt (kurze × lange Seite); landscape = Standardausrichtung beim Auswählen */
-export const PAGE_FORMATS: { id: string; name: string; short: number; long: number; landscape?: boolean }[] = [
-  { id: 'A0', name: 'A0', short: mm(841), long: mm(1189) },
-  { id: 'A1', name: 'A1', short: mm(594), long: mm(841) },
-  { id: 'A2', name: 'A2', short: mm(420), long: mm(594) },
-  { id: 'A3', name: 'A3', short: mm(297), long: mm(420) },
-  { id: 'A4', name: 'A4', short: mm(210), long: mm(297) },
-  { id: 'A5', name: 'A5', short: mm(148), long: mm(210) },
-  { id: 'A6', name: 'A6', short: mm(105), long: mm(148) },
-  { id: 'letter', name: 'US Letter', short: inch(8.5), long: inch(11) },
-  { id: 'legal', name: 'US Legal', short: inch(8.5), long: inch(14) },
-  { id: 'ppt169', name: 'PowerPoint 16:9', short: inch(7.5), long: inch(13.333), landscape: true },
-  { id: 'ppt43', name: 'PowerPoint 4:3', short: inch(7.5), long: inch(10), landscape: true },
-  { id: 'poster2436', name: 'Poster 24 × 36″', short: inch(24), long: inch(36) },
-  { id: 'poster3648', name: 'Poster 36 × 48″', short: inch(36), long: inch(48) },
-]
+export { PAGE_FORMATS }
 
 /** Größe einer Seite in Dokument-Einheiten */
 export function pageDims(p: PageLayout): { w: number; h: number } {
@@ -66,6 +48,8 @@ export function fitLayout(doc: Doc, format: string, landscape: boolean, center: 
 /** Seite an einer Seite des Rasters anbauen */
 export function addPageAt(p: PageLayout, side: 'top' | 'bottom' | 'left' | 'right'): PageLayout {
   const { w, h } = pageDims(p)
+  if ((side === 'top' || side === 'bottom') && p.rows >= MAX_PAGES) return p
+  if ((side === 'left' || side === 'right') && p.cols >= MAX_PAGES) return p
   if (side === 'top') return { ...p, rows: p.rows + 1, y: p.y - h }
   if (side === 'bottom') return { ...p, rows: p.rows + 1 }
   if (side === 'left') return { ...p, cols: p.cols + 1, x: p.x - w }

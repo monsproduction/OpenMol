@@ -444,6 +444,33 @@ export const FONTS: { name: string; css: string }[] = [
   { name: 'Courier New', css: '"Courier New", Courier, monospace' },
 ]
 
+/** Farbangabe, die gefahrlos in SVG/HTML-Attribute darf (#rgb, #rrggbb(aa), Farbnamen, rgb()/hsl()); sonst undefined */
+const SAFE_COLOR = /^(#[0-9a-f]{3,8}|[a-z]{3,20}|(?:rgb|hsl)a?\([\d\s.,%]+\))$/i
+export function safeColor(c: unknown): string | undefined {
+  return typeof c === 'string' && SAFE_COLOR.test(c.trim()) ? c.trim() : undefined
+}
+
+/** höchstens so viele Seiten je Richtung (Seitenlayout) */
+export const MAX_PAGES = 50
+
+/** Seitenformate in pt (kurze × lange Seite); landscape = Standardausrichtung beim Auswählen (siehe model/pages.ts) */
+const mmPt = (v: number) => (v * 72) / 25.4
+export const PAGE_FORMATS: { id: string; name: string; short: number; long: number; landscape?: boolean }[] = [
+  { id: 'A0', name: 'A0', short: mmPt(841), long: mmPt(1189) },
+  { id: 'A1', name: 'A1', short: mmPt(594), long: mmPt(841) },
+  { id: 'A2', name: 'A2', short: mmPt(420), long: mmPt(594) },
+  { id: 'A3', name: 'A3', short: mmPt(297), long: mmPt(420) },
+  { id: 'A4', name: 'A4', short: mmPt(210), long: mmPt(297) },
+  { id: 'A5', name: 'A5', short: mmPt(148), long: mmPt(210) },
+  { id: 'A6', name: 'A6', short: mmPt(105), long: mmPt(148) },
+  { id: 'letter', name: 'US Letter', short: 8.5 * 72, long: 11 * 72 },
+  { id: 'legal', name: 'US Legal', short: 8.5 * 72, long: 14 * 72 },
+  { id: 'ppt169', name: 'PowerPoint 16:9', short: 7.5 * 72, long: 13.333 * 72, landscape: true },
+  { id: 'ppt43', name: 'PowerPoint 4:3', short: 7.5 * 72, long: 10 * 72, landscape: true },
+  { id: 'poster2436', name: 'Poster 24 × 36″', short: 24 * 72, long: 36 * 72 },
+  { id: 'poster3648', name: 'Poster 36 × 48″', short: 36 * 72, long: 48 * 72 },
+]
+
 export function fontCss(name: string | undefined): string {
   return FONTS.find((f) => f.name === name)?.css ?? FONTS[0].css
 }
@@ -527,9 +554,34 @@ export function normalizeDoc(raw: Partial<Doc>): Doc {
     style: { ...base.style, ...obj(raw.style, base.style) },
   }
   const ok = (n: unknown) => typeof n === 'number' && Number.isFinite(n)
-  const pg = d.style.page
-  if (pg && (typeof pg.format !== 'string' || !ok(pg.x) || !ok(pg.y) || !(pg.cols >= 1) || !(pg.rows >= 1))) delete d.style.page
-  else if (pg) d.style.page = { ...pg, cols: Math.min(50, Math.round(pg.cols)), rows: Math.min(50, Math.round(pg.rows)) }
+  // Stil aus der Datei prüfen: unsinnige Werte (Text statt Zahl, 0, negativ) machen sonst die ganze Zeichnung kaputt,
+  // und die Hintergrundfarbe landet im SVG/PDF-Export – nur echte Farbangaben übernehmen
+  const st = d.style
+  const def = base.style
+  const inRange = (v: unknown, lo: number, hi: number, fb: number) => (typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : fb)
+  st.bondLength = inRange(st.bondLength, 5, 400, def.bondLength)
+  st.lineWidth = inRange(st.lineWidth, 0.1, 20, def.lineWidth)
+  st.fontSize = inRange(st.fontSize, 2, 200, def.fontSize)
+  for (const k of ['chargeCircle', 'showWarnings', 'showCarbons', 'colorAtoms'] as const) if (typeof st[k] !== 'boolean') st[k] = def[k]
+  for (const k of ['depth3d', 'showCip'] as const) if (st[k] !== undefined && typeof st[k] !== 'boolean') delete st[k]
+  if (typeof st.font !== 'string' || !FONTS.some((f) => f.name === st.font)) st.font = def.font
+  if (st.background !== undefined) {
+    const c = safeColor(st.background)
+    if (c) st.background = c
+    else delete st.background
+  }
+  const pg = st.page
+  if (pg && (typeof pg !== 'object' || !ok(pg.x) || !ok(pg.y) || !(pg.cols >= 1) || !(pg.rows >= 1))) delete st.page
+  else if (pg)
+    st.page = {
+      format: PAGE_FORMATS.some((f) => f.id === pg.format) ? pg.format : 'A4',
+      ...(pg.landscape === true ? { landscape: true } : {}),
+      x: pg.x,
+      y: pg.y,
+      cols: Math.min(MAX_PAGES, Math.round(pg.cols)),
+      rows: Math.min(MAX_PAGES, Math.round(pg.rows)),
+    }
+  else delete st.page
   for (const id in d.atoms) {
     const a = d.atoms[id]
     if (!a || !ok(a.x) || !ok(a.y)) delete d.atoms[id]

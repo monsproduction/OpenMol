@@ -104,7 +104,8 @@ export function stopAiBridge() {
 
 type Args = Record<string, unknown>
 const str = (v: unknown) => (typeof v === 'string' ? v : undefined)
-const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
+// Zahlen nur in vernünftiger Größe (eine KI kann z. B. 1e308 schicken – damit rechnet nichts mehr richtig)
+const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= 1e7 ? v : undefined)
 const doc = () => getState().doc
 
 function molecules(d: Doc) {
@@ -337,7 +338,8 @@ async function runTool(name: string, a: Args): Promise<unknown> {
       return { text: 'Neues, leeres Dokument in einem neuen Tab angelegt (das bisherige Dokument bleibt im anderen Tab offen).' }
     }
     case 'insert_structure': {
-      const smiles = await resolveStructure(String(a.structure ?? ''))
+      if (typeof a.structure !== 'string' || !a.structure.trim()) throw new Error('Bitte eine Struktur angeben (SMILES oder name:<Name>).')
+      const smiles = await resolveStructure(a.structure)
       const d = doc()
       const all = sceneBBox(getScene(d))
       const x = num(a.x) ?? (all ? all.x2 + 80 : 0)
@@ -357,9 +359,12 @@ async function runTool(name: string, a: Args): Promise<unknown> {
       return json({ id: ids[0], smiles: toSmiles(doc(), ids), formula: r?.formula, box: molBox(doc(), ids) })
     }
     case 'draw_reaction': {
-      const reactants = (a.reactants as string[]) ?? []
-      const products = (a.products as string[]) ?? []
-      const reagents = (a.reagents_above as string[]) ?? []
+      // Listen von Strukturen; ein einzelner Text gilt als Liste mit einem Eintrag
+      const list = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : typeof v === 'string' && v.trim() ? [v] : [])
+      const reactants = list(a.reactants)
+      const products = list(a.products)
+      const reagents = list(a.reagents_above)
+      if (!reactants.length && !products.length) throw new Error('Bitte mindestens ein Edukt (reactants) oder Produkt (products) angeben.')
       // alle Strukturen zuerst auflösen (Namen über PubChem), damit nichts halb gezeichnet wird
       const rs = await Promise.all(reactants.map(resolveStructure))
       const ps = await Promise.all(products.map(resolveStructure))
@@ -502,10 +507,16 @@ async function runTool(name: string, a: Args): Promise<unknown> {
         const r = tt.rows[i]
         if (str(a.role)) r.role = str(a.role) as StoichRole
         if (str(a.name)) r.name = str(a.name)
-        // Dichte und Konzentration sind getrennte Spalten (0 entfernt den Wert)
-        if (num(a.conc_M) !== undefined) r.conc = num(a.conc_M) || undefined
+        // Dichte und Konzentration sind getrennte Spalten (0 entfernt den Wert, negativ ist unsinnig)
+        if (num(a.conc_M) !== undefined) {
+          if (num(a.conc_M)! < 0) err.push('Die Konzentration muss positiv sein (0 entfernt sie).')
+          else r.conc = num(a.conc_M) || undefined
+        }
         if (str(a.solvent)) r.solvent = str(a.solvent)
-        if (num(a.density) !== undefined) r.density = num(a.density) || undefined
+        if (num(a.density) !== undefined) {
+          if (num(a.density)! < 0) err.push('Die Dichte muss positiv sein (0 entfernt sie).')
+          else r.density = num(a.density) || undefined
+        }
         if (a.reference === true) {
           // Bezug wechseln: Mengen bleiben, Äquivalente werden umgerechnet
           const nNew = calc.rows[i].n
@@ -525,8 +536,11 @@ async function runTool(name: string, a: Args): Promise<unknown> {
           })
         }
         if (num(a.equivalents) !== undefined) {
-          r.eq = num(a.equivalents)
-          if (r.role !== 'product') r.driver = 'eq'
+          if (num(a.equivalents)! <= 0) err.push('Äquivalente müssen größer als 0 sein.')
+          else {
+            r.eq = num(a.equivalents)
+            if (r.role !== 'product') r.driver = 'eq'
+          }
         }
         const amt = str(a.amount)
         if (amt) {
@@ -558,7 +572,7 @@ async function runTool(name: string, a: Args): Promise<unknown> {
     case 'add_stoich_row': {
       const t = tableOf(a)
       const row: StoichRow = rowFromName(String(a.text ?? ''), str(a.role) as StoichRole | undefined)
-      if (num(a.equivalents) !== undefined) row.eq = num(a.equivalents)
+      if (num(a.equivalents) !== undefined && num(a.equivalents)! > 0) row.eq = num(a.equivalents)
       const amt = str(a.amount)
       if (amt) {
         const p = parseQty(amt, row.role === 'solvent' ? 'V' : 'm', row.role === 'solvent' ? 'mL' : 'mg')

@@ -526,17 +526,33 @@ export function parseStructure(text: string): OCL.Molecule {
     if (!mol.getAllAtoms()) throw new Error('Das Molfile enthält keine Atome')
     return mol
   }
+  // sehr große Strukturen: Layout und Entwirren brauchen dann viele Sekunden (die Oberfläche stünde still)
+  const atomCount = (t.match(/Cl|Br|\[[^\]]*\]|[BCNOPSFIbcnops*]/g) ?? []).length
+  if (atomCount > MAX_SMILES_ATOMS) throw new Error(`Die Struktur ist zu groß (etwa ${atomCount} Atome, höchstens ${MAX_SMILES_ATOMS}).`)
+  // Platzhalter * bzw. [*] (Rest, Anknüpfungspunkt): OpenChemLib läse daraus Kohlenstoff – vorher als Francium
+  // markieren und danach zum Rest R machen (Francium selbst kommt in Strukturformeln praktisch nicht vor)
+  const wild = /\*/.test(t) && !/Fr/.test(t)
+  const smi = wild ? t.replace(/\[\*[^\]]*\]|\*/g, '[Fr]') : t
   // SMILES: OpenChemLib erzeugt die Koordinaten selbst – Überlappungen danach auflösen
   let mol: OCL.Molecule
   try {
-    mol = M.fromSmiles(t)
+    mol = M.fromSmiles(smi)
   } catch (e) {
     throw new Error(smilesErrorText(t, e instanceof Error ? e.message : String(e)))
   }
   if (!mol.getAllAtoms()) throw new Error('Kein gültiges SMILES')
+  if (wild)
+    for (let i = 0; i < mol.getAllAtoms(); i++)
+      if (mol.getAtomicNo(i) === 87) {
+        mol.setAtomicNo(i, 0)
+        mol.setAtomCustomLabel(i, 'R')
+      }
   declashMol(mol)
   return mol
 }
+
+/** Obergrenze für eingefügte SMILES (Atome) */
+const MAX_SMILES_ATOMS = 2000
 
 /** Verständliche Meldung statt der technischen Parser-Meldung */
 function smilesErrorText(t: string, msg: string): string {
@@ -686,6 +702,49 @@ export function parseFormula(f: string): Map<string, number> {
 const PUG = 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound'
 
 /**
+ * Anfrage an PubChem/Wikidata: höchstens 4 je Sekunde und 2 gleichzeitig (PubChem antwortet sonst mit 503
+ * „ServerBusy“), bei Überlastung bis zu dreimal mit wachsender Pause nachfassen. Ohne Netz kommt eine
+ * verständliche Meldung.
+ */
+let nextSlot = 0
+let running = 0
+const waiting: (() => void)[] = []
+async function netFetch(url: string, init?: RequestInit): Promise<Response> {
+  if (running >= 2) await new Promise<void>((r) => waiting.push(r))
+  running++
+  try {
+    for (let attempt = 0; ; attempt++) {
+      const now = Date.now()
+      const wait = Math.max(0, nextSlot - now)
+      nextSlot = Math.max(now, nextSlot) + 250
+      if (wait) await new Promise((r) => setTimeout(r, wait))
+      let r: Response
+      try {
+        // beim Nachfassen am Cache vorbei: PubChem erlaubt das Zwischenspeichern auch seiner „überlastet“-Antwort,
+        // sonst käme dieselbe Fehlermeldung immer wieder aus dem Cache
+        r = await fetch(url, attempt ? { ...init, cache: 'reload' } : init)
+      } catch {
+        throw new Error('Der Online-Dienst (PubChem bzw. Wikidata) ist nicht erreichbar – besteht eine Internetverbindung?')
+      }
+      if ((r.status === 503 || r.status === 429) && attempt < 3) {
+        await new Promise((res) => setTimeout(res, 1500 * (attempt + 1)))
+        continue
+      }
+      return r
+    }
+  } finally {
+    running--
+    waiting.shift()?.()
+  }
+}
+
+/** Fehlermeldung für eine fehlgeschlagene Antwort: „nicht gefunden“ nur bei 404/400, sonst Überlastung */
+function pubchemError(r: Response, notFound: string): Error {
+  if (r.status === 404 || r.status === 400) return new Error(notFound)
+  return new Error('PubChem ist gerade überlastet oder nicht erreichbar – bitte gleich noch einmal versuchen.')
+}
+
+/**
  * Name → Struktur über PubChem: SMILES und, wenn abrufbar, PubChems eigene 2D-Darstellung als Molfile (ohne
  * explizite H). Die ist bei verbrückten Naturstoffen (Morphin, Strychnin …) die übliche Lehrbuch-Darstellung –
  * deutlich besser als ein neu berechnetes Layout. Weicht sie vom SMILES ab, wird sie verworfen.
@@ -705,9 +764,10 @@ export async function nameToStructure(input: string): Promise<{ smiles: string; 
   const cas = casInInput(input)
   if (cas && !casValid(cas)) throw new Error(`Ungültige CAS-Nummer ${cas}: Die Prüfziffer passt nicht – bitte die Nummer prüfen.`)
   const name = cas ?? input.trim()
+  if (!name) throw new Error('Bitte einen Namen oder eine CAS-Nummer eingeben.')
   const [p, mf] = await Promise.all([
     nameToSmiles(name).catch((e) => {
-      if (cas) throw new Error(`Keine Verbindung mit der CAS-Nummer ${cas} in PubChem gefunden.`)
+      if (cas && /Kein Eintrag/.test(String(e?.message))) throw new Error(`Keine Verbindung mit der CAS-Nummer ${cas} in PubChem gefunden.`)
       throw e
     }),
     pubchem2D(name).catch(() => null),
@@ -722,7 +782,7 @@ export async function nameToStructure(input: string): Promise<{ smiles: string; 
 }
 
 async function pubchem2D(name: string): Promise<string | null> {
-  const r = await fetch(`${PUG}/name/${encodeURIComponent(name)}/SDF?record_type=2d`)
+  const r = await netFetch(`${PUG}/name/${encodeURIComponent(name)}/SDF?record_type=2d`)
   if (!r.ok) return null
   const mol = M.fromMolfile(await r.text())
   if (!mol.getAllAtoms()) return null
@@ -731,8 +791,8 @@ async function pubchem2D(name: string): Promise<string | null> {
 }
 
 export async function nameToSmiles(name: string): Promise<{ smiles: string; title?: string }> {
-  const r = await fetch(`${PUG}/name/${encodeURIComponent(name)}/property/SMILES,IUPACName/JSON`)
-  if (!r.ok) throw new Error('Kein Eintrag in PubChem gefunden (Namen bitte auf Englisch eingeben).')
+  const r = await netFetch(`${PUG}/name/${encodeURIComponent(name)}/property/SMILES,IUPACName/JSON`)
+  if (!r.ok) throw pubchemError(r, 'Kein Eintrag in PubChem gefunden (Namen bitte auf Englisch eingeben).')
   const j = await r.json()
   const p = j?.PropertyTable?.Properties?.[0]
   const smiles = p?.SMILES ?? p?.IsomericSMILES ?? p?.CanonicalSMILES
@@ -742,8 +802,8 @@ export async function nameToSmiles(name: string): Promise<{ smiles: string; titl
 
 export async function smilesToName(smiles: string): Promise<{ iupac?: string; title?: string; cid?: number }> {
   const body = new URLSearchParams({ smiles })
-  const r = await fetch(`${PUG}/smiles/property/IUPACName,Title/JSON`, { method: 'POST', body })
-  if (!r.ok) throw new Error('Struktur in PubChem nicht gefunden.')
+  const r = await netFetch(`${PUG}/smiles/property/IUPACName,Title/JSON`, { method: 'POST', body })
+  if (!r.ok) throw pubchemError(r, 'Struktur in PubChem nicht gefunden.')
   const j = await r.json()
   const p = j?.PropertyTable?.Properties?.[0]
   if (!p || (!p.IUPACName && !p.Title)) throw new Error('Struktur in PubChem nicht gefunden.')
@@ -765,8 +825,8 @@ export function casValid(cas: string): boolean {
  */
 export async function pubchemCas(q: { smiles?: string; name?: string }): Promise<string | null> {
   const r = q.smiles
-    ? await fetch(`${PUG}/smiles/synonyms/JSON`, { method: 'POST', body: new URLSearchParams({ smiles: q.smiles }) })
-    : await fetch(`${PUG}/name/${encodeURIComponent(q.name ?? '')}/synonyms/JSON`)
+    ? await netFetch(`${PUG}/smiles/synonyms/JSON`, { method: 'POST', body: new URLSearchParams({ smiles: q.smiles }) })
+    : await netFetch(`${PUG}/name/${encodeURIComponent(q.name ?? '')}/synonyms/JSON`)
   if (r.status === 404 || r.status === 400) return null
   if (!r.ok) throw new Error('PubChem ist gerade nicht erreichbar.')
   const syn: unknown = (await r.json())?.InformationList?.Information?.[0]?.Synonym
@@ -776,7 +836,7 @@ export async function pubchemCas(q: { smiles?: string; name?: string }): Promise
 
 /** PubChem-CID zu einem Namen (null = unbekannt) */
 export async function pubchemCidByName(name: string): Promise<number | null> {
-  const r = await fetch(`${PUG}/name/${encodeURIComponent(name)}/cids/JSON`)
+  const r = await netFetch(`${PUG}/name/${encodeURIComponent(name)}/cids/JSON`)
   if (r.status === 404 || r.status === 400) return null
   if (!r.ok) throw new Error('PubChem ist gerade nicht erreichbar.')
   const cid = (await r.json())?.IdentifierList?.CID?.[0]
@@ -785,7 +845,7 @@ export async function pubchemCidByName(name: string): Promise<number | null> {
 
 /** CAS-Nummer zu einer CID (erste formal gültige aus den Synonymen) */
 export async function pubchemCasByCid(cid: number): Promise<string | null> {
-  const r = await fetch(`${PUG}/cid/${cid}/synonyms/JSON`)
+  const r = await netFetch(`${PUG}/cid/${cid}/synonyms/JSON`)
   if (r.status === 404 || r.status === 400) return null
   if (!r.ok) throw new Error('PubChem ist gerade nicht erreichbar.')
   const syn: unknown = (await r.json())?.InformationList?.Information?.[0]?.Synonym
@@ -799,7 +859,7 @@ export async function pubchemCasByCid(cid: number): Promise<string | null> {
  * erste vorhandene Quelle. codes = [] heißt: Quelle vorhanden, aber keine Piktogramme; null = keine Angaben.
  */
 export async function pubchemGhs(cid: number): Promise<{ codes: string[]; source: string } | null> {
-  const r = await fetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=GHS%20Classification`)
+  const r = await netFetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=GHS%20Classification`)
   if (r.status === 404 || r.status === 400) return null
   if (!r.ok) throw new Error('PubChem ist gerade nicht erreichbar.')
   const j = await r.json()
@@ -824,7 +884,7 @@ export async function pubchemGhs(cid: number): Promise<{ codes: string[]; source
 /** PubChem-Eintrag zur Struktur: CID, InChIKey, Titel – null, wenn es keinen gibt */
 export async function pubchemLookup(smiles: string): Promise<{ cid: number; inchikey?: string; title?: string } | null> {
   const body = new URLSearchParams({ smiles })
-  const r = await fetch(`${PUG}/smiles/property/InChIKey,Title/JSON`, { method: 'POST', body })
+  const r = await netFetch(`${PUG}/smiles/property/InChIKey,Title/JSON`, { method: 'POST', body })
   if (r.status === 404 || r.status === 400) return null
   if (!r.ok) throw new Error('PubChem ist gerade nicht erreichbar.')
   const p = (await r.json())?.PropertyTable?.Properties?.[0]
@@ -842,7 +902,7 @@ export async function wikipediaLookup(smiles: string): Promise<{ url: string; ti
   const conds = [`{ ?item wdt:P662 "${pc.cid}" }`]
   if (pc.inchikey && /^[A-Z-]+$/.test(pc.inchikey)) conds.push(`{ ?item wdt:P235 "${pc.inchikey}" }`)
   const q = `SELECT ?article WHERE { ${conds.join(' UNION ')} ?article schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . } LIMIT 1`
-  const r = await fetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(q)}`, { headers: { Accept: 'application/sparql-results+json' } })
+  const r = await netFetch(`https://query.wikidata.org/sparql?format=json&query=${encodeURIComponent(q)}`, { headers: { Accept: 'application/sparql-results+json' } })
   if (!r.ok) throw new Error('Wikidata/Wikipedia ist gerade nicht erreichbar.')
   const url = (await r.json())?.results?.bindings?.[0]?.article?.value as string | undefined
   return url ? { url, title: pc.title } : null
