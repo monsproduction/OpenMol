@@ -393,11 +393,46 @@ function registerIpc() {
 
 const OM_RE = /OM1:[A-Za-z0-9_-]{16,}/
 
-/** in einem Puffer nach „OM1:…“ suchen: direkt (PNG, Office-Zeichnungsformat) und in data-URIs von HTML (base64) */
+/**
+ * Teile eines ZIP-Pakets (Office-Zeichnungsformat der Zwischenablage, Word-Dokument) entpacken – über das
+ * Inhaltsverzeichnis am Ende, Teile bis 50 MB
+ */
+function zipParts(buf) {
+  const out = []
+  const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
+  if (eocd < 0 || eocd + 22 > buf.length) return out
+  let p = buf.readUInt32LE(eocd + 16)
+  const n = buf.readUInt16LE(eocd + 10)
+  for (let i = 0; i < n && p + 46 <= buf.length && buf.readUInt32LE(p) === 0x02014b50; i++) {
+    const method = buf.readUInt16LE(p + 10)
+    const size = buf.readUInt32LE(p + 20)
+    const local = buf.readUInt32LE(p + 42)
+    p += 46 + buf.readUInt16LE(p + 28) + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32)
+    if (local + 30 > buf.length || size > 50e6) continue
+    const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28)
+    const data = buf.subarray(start, start + size)
+    try {
+      out.push(method === 8 ? zlib.inflateRawSync(data) : data)
+    } catch {
+      // beschädigter Teil – überspringen
+    }
+  }
+  return out
+}
+
+/**
+ * in einem Puffer nach „OM1:…“ suchen: direkt (PNG, ungepackt im Office-Format), in den gepackten Teilen eines
+ * ZIP-Pakets (Titel des Alternativtexts im Office-Zeichnungsformat) und in data-URIs von HTML (base64)
+ */
 function findPayload(buf) {
   const latin = buf.toString('latin1')
   const m = OM_RE.exec(latin)
   if (m) return m[0]
+  if (latin.startsWith('PK\x03\x04'))
+    for (const part of zipParts(buf)) {
+      const z = OM_RE.exec(part.toString('latin1'))
+      if (z) return z[0]
+    }
   for (const d of latin.matchAll(/data:image\/png;base64,([A-Za-z0-9+/=]+)/g)) {
     const n = OM_RE.exec(Buffer.from(d[1], 'base64').toString('latin1'))
     if (n) return n[0]

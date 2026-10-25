@@ -68,6 +68,10 @@ async function waitAndReplace(session, tag, scale) {
       pic.lockAspectRatio = true
       pic.width = newWidth
       pic.altTextDescription = 'OpenMol-Struktur'
+      // Daten zusätzlich im Titel des Alternativtexts: Word codiert über die Schnittstelle eingefügte Bilder
+      // offenbar neu und verliert dabei den Datenblock im PNG – der Titel bleibt erhalten
+      const p = OM_RE.exec(latin1(j.png))?.[0]
+      if (p) pic.altTextTitle = p
       // Hülle wieder entfernen, das Bild bleibt
       cc.delete(true)
       await ctx.sync()
@@ -86,14 +90,15 @@ async function editSelected() {
     const tag = 'openmol-' + Math.random().toString(36).slice(2, 10)
     await Word.run(async (ctx) => {
       const pics = ctx.document.getSelection().inlinePictures
-      pics.load('items/width')
+      pics.load('items/width,items/altTextTitle')
       await ctx.sync()
       if (!pics.items.length) throw new Error('Bitte zuerst ein Bild in Word anklicken (ein Bild im Text, nicht frei schwebend).')
       const pic = pics.items[0]
       const b64 = pic.getBase64ImageSrc()
       await ctx.sync()
       const bin = latin1(b64.value)
-      payload = OM_RE.exec(bin)?.[0] ?? null
+      // Daten im Bild (aus OpenMol kopiert) oder im Titel des Alternativtexts (schon einmal hier ersetzt)
+      payload = OM_RE.exec(bin)?.[0] ?? OM_RE.exec(pic.altTextTitle ?? '')?.[0] ?? null
       if (!payload) throw new Error('Dieses Bild enthält keine OpenMol-Daten. Nur Bilder, die mit OpenMol (ab 1.3.2) kopiert wurden, lassen sich bearbeiten.')
       // Maßstab merken, damit das neue Bild genauso groß gezeichnet erscheint
       scale = pic.width / pngWidthPt(bin)
