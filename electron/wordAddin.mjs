@@ -205,19 +205,75 @@ async function handle(req, res) {
   return send(res, 404, { error: 'nicht gefunden' })
 }
 
-/** Server starten, wenn das Zertifikat schon eingerichtet ist (beim Start der App) */
+/**
+ * Server starten (falls eingerichtet). Ergebnis: 'ok', 'busy' (Port 5185 von einem anderen Programm belegt),
+ * 'none' (nicht eingerichtet bzw. nicht auf dem Mac)
+ */
+let starting = null
 export function startAddinServer(handlers) {
   onEdit = handlers.onEdit
-  if (server || process.platform !== 'darwin' || !fs.existsSync(certFile()) || !fs.existsSync(keyFile())) return false
-  server = https.createServer({ cert: fs.readFileSync(certFile()), key: fs.readFileSync(keyFile()) }, (req, res) => {
-    handle(req, res).catch(() => send(res, 500, { error: 'Fehler' }))
+  if (server) return Promise.resolve('ok')
+  // läuft gerade ein Start (Einrichtung und Startprüfung gleichzeitig), auf denselben warten
+  if (starting) return starting
+  if (process.platform !== 'darwin' || !fs.existsSync(certFile()) || !fs.existsSync(keyFile())) return Promise.resolve('none')
+  starting = new Promise((resolve) => {
+    const srv = https.createServer({ cert: fs.readFileSync(certFile()), key: fs.readFileSync(keyFile()) }, (req, res) => {
+      handle(req, res).catch(() => send(res, 500, { error: 'Fehler' }))
+    })
+    srv.once('error', (e) => {
+      console.error('OpenMol: Word-Add-in-Server', e.message)
+      resolve(e.code === 'EADDRINUSE' ? 'busy' : 'none')
+    })
+    srv.listen(ADDIN_PORT, '127.0.0.1', () => {
+      server = srv
+      resolve('ok')
+    })
+  }).finally(() => {
+    starting = null
   })
-  server.on('error', (e) => {
-    console.error('OpenMol: Word-Add-in-Server', e.message)
-    server = null
-  })
-  server.listen(ADDIN_PORT, '127.0.0.1')
-  return true
+  return starting
+}
+
+function stopAddinServer() {
+  server?.close()
+  server = null
+}
+
+/** Tage, die das Zertifikat noch gilt (negativ = abgelaufen; null = keins/unlesbar) */
+function certDaysLeft() {
+  try {
+    const c = new crypto.X509Certificate(fs.readFileSync(certFile()))
+    return (new Date(c.validTo).getTime() - Date.now()) / 86400e3
+  } catch {
+    return null
+  }
+}
+
+const PORT_BUSY = `Ein anderes Programm benutzt den Anschluss ${ADDIN_PORT} auf diesem Rechner. Bis es beendet ist, kann Word OpenMol nicht erreichen („In OpenMol bearbeiten“ meldet dann, dass OpenMol nicht antwortet).`
+
+/**
+ * Beim Start der App: Zertifikat 30 Tage vor Ablauf erneuern (dann muss der Mac dem neuen einmal vertrauen), Server
+ * starten, einen belegten Anschluss melden. Nur wenn das Add-in eingerichtet ist.
+ */
+export async function checkWordAddinOnStart(win, handlers, test) {
+  if (process.platform !== 'darwin' || !fs.existsSync(certFile())) return
+  const days = certDaysLeft()
+  let renewed = false
+  if (days === null || days < 30) {
+    try {
+      await makeCert()
+      renewed = true
+    } catch (e) {
+      console.error('OpenMol: Zertifikat erneuern', e)
+    }
+  }
+  const state = await startAddinServer(handlers)
+  if (test) {
+    console.log('[word-addin] Start', { daysLeft: days === null ? null : Math.round(days), renewed, server: state })
+    return
+  }
+  if (state === 'busy') await dialog.showMessageBox(win, { type: 'warning', message: 'Word-Add-in nicht verfügbar', detail: PORT_BUSY, buttons: ['OK'] })
+  else if (renewed && !(await certTrusted())) await askTrust(win, true)
 }
 
 /** fertiges Bild (PNG mit OpenMol-Daten) für eine Sitzung bereitstellen */
@@ -233,38 +289,53 @@ export function setResult(session, png) {
  */
 export async function setupWordAddin(win, handlers, test) {
   if (process.platform !== 'darwin') return
+  let state
   try {
-    if (!fs.existsSync(certFile()) || !fs.existsSync(keyFile())) await makeCert()
+    if (!fs.existsSync(certFile()) || !fs.existsSync(keyFile()) || (certDaysLeft() ?? -1) < 30) {
+      stopAddinServer()
+      await makeCert()
+    }
     fs.mkdirSync(wefDir(), { recursive: true })
     fs.writeFileSync(path.join(wefDir(), 'OpenMol-Word-Addin.xml'), manifestXml())
-    startAddinServer(handlers)
+    state = await startAddinServer(handlers)
   } catch (e) {
     if (!test) await dialog.showMessageBox(win, { type: 'error', message: 'Word-Add-in konnte nicht eingerichtet werden', detail: String(e?.message ?? e) })
     return
   }
-  const command = `security add-trusted-cert -r trustRoot -p ssl -k ~/Library/Keychains/login.keychain-db "${certFile()}"`
   if (test) {
-    console.log('[word-addin] eingerichtet', { manifest: path.join(wefDir(), 'OpenMol-Word-Addin.xml'), trusted: await certTrusted(), command })
+    console.log('[word-addin] eingerichtet', { manifest: path.join(wefDir(), 'OpenMol-Word-Addin.xml'), trusted: await certTrusted(), server: state, command: trustCommand() })
     return
   }
-  const howTo = 'Word danach neu starten. Dann in Word: Einfügen ▸ Add-ins ▸ Meine Add-ins ▸ „OpenMol“ (unter „Entwickler-Add-ins“). Danach erscheint im Menüband „Start“ der Knopf „In OpenMol bearbeiten“.'
+  if (state === 'busy') return void (await dialog.showMessageBox(win, { type: 'warning', message: 'Word-Add-in nicht verfügbar', detail: PORT_BUSY, buttons: ['OK'] }))
   if (await certTrusted()) {
-    await dialog.showMessageBox(win, { type: 'info', message: 'Das Word-Add-in ist eingerichtet.', detail: howTo, buttons: ['OK'] })
+    await dialog.showMessageBox(win, { type: 'info', message: 'Das Word-Add-in ist eingerichtet.', detail: HOW_TO, buttons: ['OK'] })
     return
   }
+  await askTrust(win, false)
+}
+
+const HOW_TO =
+  'Word danach ganz beenden (⌘Q) und neu starten. Dann in Word: Reiter „Einfügen“, beim Knopf „Meine Add-Ins“ auf den kleinen Pfeil ▾ klicken und unter „Entwickler-Add-Ins“ „OpenMol“ wählen. Danach erscheint im Reiter „Start“ der Knopf „In OpenMol bearbeiten“.'
+
+const trustCommand = () => `security add-trusted-cert -r trustRoot -p ssl -k ~/Library/Keychains/login.keychain-db "${certFile()}"`
+
+/** Vertrauen in das Zertifikat einrichten lassen (macOS fragt dafür selbst nach dem Passwort) */
+async function askTrust(win, renewed) {
   const r = await dialog.showMessageBox(win, {
     type: 'info',
-    message: 'Dein Mac muss dem OpenMol-Zertifikat einmal vertrauen',
+    message: renewed ? 'Das Zertifikat für das Word-Add-in wurde erneuert' : 'Dein Mac muss dem OpenMol-Zertifikat einmal vertrauen',
     detail:
-      'Word zeigt Add-ins nur über HTTPS an. OpenMol hat dafür ein Zertifikat erzeugt, das ausschließlich für „localhost“ (diesen Rechner) gilt und nichts anderes beglaubigen kann. ' +
+      (renewed
+        ? 'Das bisherige Zertifikat lief bald ab. Damit „In OpenMol bearbeiten“ in Word weiter funktioniert, muss dein Mac dem neuen einmal vertrauen. '
+        : 'Word zeigt Add-ins nur über HTTPS an. OpenMol hat dafür ein Zertifikat erzeugt, das ausschließlich für „localhost“ (diesen Rechner) gilt und nichts anderes beglaubigen kann. ') +
       '„Vertrauen …“ trägt es in deinen Schlüsselbund ein – macOS fragt dabei nach deinem Passwort.\n\nAlternativ im Terminal:\n' +
-      command,
-    buttons: ['Vertrauen …', 'Befehl in Zwischenablage', 'Abbrechen'],
+      trustCommand(),
+    buttons: ['Vertrauen …', 'Befehl in Zwischenablage', 'Später'],
     cancelId: 2,
   })
   if (r.response === 1) {
     const { clipboard } = await import('electron')
-    await clipboard.writeText(command)
+    await clipboard.writeText(trustCommand())
     return
   }
   if (r.response !== 0) return
@@ -273,7 +344,7 @@ export async function setupWordAddin(win, handlers, test) {
   await dialog.showMessageBox(win, {
     type: ok ? 'info' : 'warning',
     message: ok ? 'Fertig – das Word-Add-in ist eingerichtet.' : 'Das Zertifikat ist noch nicht vertrauenswürdig.',
-    detail: ok ? howTo : (t.out || 'Abgebrochen?') + '\n\nBefehl zum Wiederholen im Terminal:\n' + command,
+    detail: ok ? (renewed ? 'Word einmal neu starten.' : HOW_TO) : (t.out || 'Abgebrochen?') + '\n\nBefehl zum Wiederholen im Terminal:\n' + trustCommand(),
     buttons: ['OK'],
   })
 }

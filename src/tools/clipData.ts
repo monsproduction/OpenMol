@@ -1,10 +1,39 @@
-// OpenMol-Daten, die ein kopiertes Bild mitnimmt (Versuch „Word-Austausch“): die kopierte Zeichnung als komprimierter
-// Text „OM1:…“. Er steckt in einem Textblock des PNG (tEXt „openmol“) bzw. im Titel eines HTML-Bildes und soll beim
-// Zurückkopieren aus Word/PowerPoint wieder zu einer bearbeitbaren Struktur werden.
+// OpenMol-Daten, die ein kopiertes Bild mitnimmt: die kopierte Zeichnung als komprimierter Text „OM1:….“. Er steckt
+// in einem Textblock des PNG (tEXt „openmol“) und – nach dem Bearbeiten über das Word-Add-in – im Titel des
+// Alternativtexts. Aus Word/PowerPoint zurückkopiert wird daraus wieder eine bearbeitbare Struktur.
+// Regel für künftige Versionen: „OM1“ und das Feld `version` nie umdeuten – ein neues Format bekommt „OM2:“, und der
+// Leser für ältere Formate bleibt erhalten (Bilder in Word-Dokumenten leben lange).
 import type { ClipData } from '../model/ops'
 import type { DocStyle } from '../model/types'
+import { emptyDoc, normalizeDoc } from '../model/types'
 
 const MARK = 'OM1:'
+/** Obergrenze für Objekte aus einem Bild (Schutz vor manipulierten Dokumenten) */
+const MAX_OBJECTS = 20000
+
+/**
+ * Zeichnung aus einem Bild so prüfen wie eine geöffnete Datei: Word-Dokumente können von anderen stammen. Kaputte
+ * Atome/Bindungen/Pfeile/Texte fallen weg (siehe normalizeDoc), zu große Inhalte werden abgelehnt.
+ */
+function sanitizeClip(c: Record<string, unknown>): ClipData | null {
+  const list = (v: unknown) => (Array.isArray(v) ? v.filter((o) => o && typeof o === 'object' && typeof (o as { id?: unknown }).id === 'string') : [])
+  const keys = ['atoms', 'bonds', 'arrows', 'curved', 'texts', 'shapes', 'fills', 'cycles', 'tables'] as const
+  if (keys.reduce((n, k) => n + list(c[k]).length, 0) > MAX_OBJECTS) return null
+  const byId = (v: unknown) => Object.fromEntries(list(v).map((o) => [(o as { id: string }).id, o]))
+  const raw = Object.fromEntries(keys.map((k) => [k, byId(c[k])]))
+  const d = normalizeDoc({ ...emptyDoc(), ...raw })
+  return {
+    atoms: Object.values(d.atoms),
+    bonds: Object.values(d.bonds),
+    arrows: Object.values(d.arrows),
+    curved: Object.values(d.curved),
+    texts: Object.values(d.texts),
+    shapes: Object.values(d.shapes),
+    fills: Object.values(d.fills),
+    cycles: Object.values(d.cycles),
+    tables: Object.values(d.tables),
+  }
+}
 
 function b64url(bytes: Uint8Array): string {
   let s = ''
@@ -36,9 +65,11 @@ async function decodeOnce(body: string): Promise<{ clip: ClipData; style?: Parti
     const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'))
     const j = JSON.parse(await new Response(stream).text())
     const c = j?.format === 'openmol-clip' ? j.clip : null
-    if (!c || !Array.isArray(c.atoms) || !Array.isArray(c.bonds)) return null
-    for (const k of ['arrows', 'curved', 'texts', 'shapes'] as const) if (!Array.isArray(c[k])) c[k] = []
-    return { clip: c as ClipData, style: j.style && typeof j.style === 'object' ? j.style : undefined }
+    if (!c || typeof c !== 'object' || !Array.isArray(c.atoms) || !Array.isArray(c.bonds)) return null
+    const clip = sanitizeClip(c)
+    if (!clip) return null
+    // der Stil wird beim Anlegen des Dokuments mit normalizeDoc geprüft (siehe wordLink.ts)
+    return { clip, style: j.style && typeof j.style === 'object' && !Array.isArray(j.style) ? j.style : undefined }
   } catch {
     return null
   }

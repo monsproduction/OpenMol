@@ -3,15 +3,15 @@
 // gebauten Ordner dist/ geladen (in der Entwicklung vom Vite-Server). Alles, was der Browser nicht kann
 // (Datei-Dialoge, Menüleiste, Einstellungen als Datei), läuft hier und ist der Oberfläche nur über die schmale
 // Brücke in preload.cjs zugänglich.
-import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, net, protocol, shell } from 'electron'
-import zlib from 'node:zlib'
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell } from 'electron'
+import { scanClipboard, writePng } from './clipboard.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { buildMenu, setMenuLang } from './menu.mjs'
 import { initStore } from './store.mjs'
 import { checkForUpdates, scheduleAutoCheck } from './updater.mjs'
-import { setResult, setupWordAddin, startAddinServer } from './wordAddin.mjs'
+import { checkWordAddinOnStart, setResult, setupWordAddin } from './wordAddin.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
@@ -293,12 +293,7 @@ function registerIpc() {
   // Mac: PNG roh als public.png – als image/png würde Chromium es neu codieren und den Datenblock verwerfen. Word und
   // PowerPoint für Mac behalten es unverändert (getestet). Windows: vorerst als normales Bild (ohne Daten), bis der
   // Rohweg dort getestet ist (andere Programme brauchen dort zusätzlich die üblichen Bitmap-Formate)
-  ipcMain.handle('openmol:clip-write', async (_e, kind, data) => {
-    if (kind !== 'png' || !(data instanceof Uint8Array)) return false
-    const type = process.platform === 'darwin' ? 'electron application/osclipboard;format="public.png"' : 'image/png'
-    await clipboard.write([new ClipboardItem({ [type]: new Blob([Buffer.from(data)], { type: 'image/png' }) })])
-    return true
-  })
+  ipcMain.handle('openmol:clip-write', (_e, kind, data) => (kind === 'png' && data instanceof Uint8Array ? writePng(data) : false))
   ipcMain.handle('openmol:clip-scan', () => scanClipboard())
   // „Zurück nach Word“: fertiges Bild für die wartende Add-in-Seite bereitlegen
   ipcMain.handle('openmol:word-result', (_e, session, png) => setResult(String(session), png))
@@ -391,92 +386,6 @@ function registerIpc() {
   })
 }
 
-const OM_RE = /OM1:[A-Za-z0-9_-]{16,}/
-
-/**
- * Teile eines ZIP-Pakets (Office-Zeichnungsformat der Zwischenablage, Word-Dokument) entpacken – über das
- * Inhaltsverzeichnis am Ende, Teile bis 50 MB
- */
-function zipParts(buf) {
-  const out = []
-  const eocd = buf.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]))
-  if (eocd < 0 || eocd + 22 > buf.length) return out
-  let p = buf.readUInt32LE(eocd + 16)
-  const n = buf.readUInt16LE(eocd + 10)
-  for (let i = 0; i < n && p + 46 <= buf.length && buf.readUInt32LE(p) === 0x02014b50; i++) {
-    const method = buf.readUInt16LE(p + 10)
-    const size = buf.readUInt32LE(p + 20)
-    const local = buf.readUInt32LE(p + 42)
-    p += 46 + buf.readUInt16LE(p + 28) + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32)
-    if (local + 30 > buf.length || size > 50e6) continue
-    const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28)
-    const data = buf.subarray(start, start + size)
-    try {
-      out.push(method === 8 ? zlib.inflateRawSync(data) : data)
-    } catch {
-      // beschädigter Teil – überspringen
-    }
-  }
-  return out
-}
-
-/**
- * in einem Puffer nach „OM1:…“ suchen: direkt (PNG, ungepackt im Office-Format), in den gepackten Teilen eines
- * ZIP-Pakets (Titel des Alternativtexts im Office-Zeichnungsformat) und in data-URIs von HTML (base64)
- */
-function findPayload(buf) {
-  const latin = buf.toString('latin1')
-  const m = OM_RE.exec(latin)
-  if (m) return m[0]
-  if (latin.startsWith('PK\x03\x04'))
-    for (const part of zipParts(buf)) {
-      const z = OM_RE.exec(part.toString('latin1'))
-      if (z) return z[0]
-    }
-  for (const d of latin.matchAll(/data:image\/png;base64,([A-Za-z0-9+/=]+)/g)) {
-    const n = OM_RE.exec(Buffer.from(d[1], 'base64').toString('latin1'))
-    if (n) return n[0]
-  }
-  return null
-}
-
-/** prüfen, ob die Nutzlast eine gültige OpenMol-Zeichnung ist (deflate + JSON); hinten können bis zu drei Zeichen
- *  aus der PNG-Prüfsumme hängen (Bilder ohne Endpunkt) – wie beim Einlesen in der Oberfläche abschneiden */
-function validPayload(p) {
-  const body = p.slice(4).replace(/\.$/, '')
-  for (let cut = 0; cut <= 3; cut++) {
-    try {
-      const j = JSON.parse(zlib.inflateSync(Buffer.from(cut ? body.slice(0, -cut) : body, 'base64url')).toString('utf8'))
-      if (j?.format === 'openmol-clip' && Array.isArray(j.clip?.atoms)) return true
-    } catch {
-      // nächste Länge versuchen
-    }
-  }
-  return false
-}
-
-/**
- * Formate der Zwischenablage (auch die eigenen von Word/PowerPoint, z. B. com.microsoft.Art--GVML-ClipFormat) nach
- * OpenMol-Daten durchsuchen; Rückgabe: erste gültige Nutzlast oder null. Nur gerenderte Bilder (TIFF – oft mehrere MB –,
- * PDF, JPEG) werden übersprungen: darin stecken nie Daten.
- */
-async function scanClipboard() {
-  for (const item of await clipboard.read()) {
-    for (const type of item.types) {
-      if (/tiff|pdf|jpeg|findtext/i.test(type)) continue
-      let buf
-      try {
-        buf = Buffer.from(await (await item.getType(type)).arrayBuffer())
-      } catch {
-        continue
-      }
-      const p = buf.length ? findPayload(buf) : null
-      if (p && validPayload(p)) return p
-    }
-  }
-  return null
-}
-
 async function readDoc(p) {
   const buf = await fs.promises.readFile(p)
   return { path: p, name: path.basename(p), text: buf.toString('utf8') }
@@ -512,8 +421,9 @@ app.whenReady().then(() => {
   for (const a of process.argv.slice(1)) if (!a.startsWith('-') && fs.existsSync(a) && isDocFile(a)) sendOpen(a)
   createWindow()
   scheduleAutoCheck(() => win)
-  // Word-Add-in (Mac): Server nur, wenn es schon eingerichtet ist (Menü „Word-Add-in einrichten …“)
-  startAddinServer(addinHandlers)
+  // Word-Add-in (Mac): Server nur, wenn es schon eingerichtet ist (Menü „Word-Add-in einrichten …“); Zertifikat
+  // rechtzeitig erneuern, belegten Anschluss melden
+  win.webContents.once('did-finish-load', () => void checkWordAddinOnStart(win, addinHandlers, !!process.env.OPENMOL_TEST_DIALOGS))
   // nur für automatische Tests: Einrichtung ohne Menü und ohne Dialoge
   if (process.env.OPENMOL_TEST_WORDADDIN) void setupWordAddin(win, addinHandlers, true)
   app.on('activate', () => {

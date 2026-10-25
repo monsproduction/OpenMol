@@ -43,8 +43,21 @@ async function checkConnection() {
   }
 }
 
+/**
+ * Titel des Alternativtexts: „OM1:…. w=123.45“ – die Daten und die natürliche Breite (pt) des Original-Bildes.
+ * Word codiert über die Schnittstelle eingesetzte Bilder offenbar neu: dann fehlen im PNG Datenblock und Auflösung,
+ * der Titel bleibt erhalten.
+ */
+function titleFor(payload, widthPt) {
+  return `${payload} w=${widthPt.toFixed(2)}`
+}
+function widthFromTitle(title) {
+  const m = / w=([\d.]+)/.exec(title ?? '')
+  return m ? Number(m[1]) : null
+}
+
 /** auf das Ergebnis aus OpenMol warten (bis zu 2 Stunden) und das Bild ersetzen */
-async function waitAndReplace(session, tag, scale) {
+async function waitAndReplace(session, tag, scale, description) {
   const until = Date.now() + 2 * 3600 * 1000
   while (Date.now() < until) {
     await new Promise((r) => setTimeout(r, 1000))
@@ -56,7 +69,8 @@ async function waitAndReplace(session, tag, scale) {
       return
     }
     if (!j.ready) continue
-    const newWidth = pngWidthPt(latin1(j.png)) * scale
+    const natural = pngWidthPt(latin1(j.png))
+    const newWidth = natural * scale
     await Word.run(async (ctx) => {
       const ccs = ctx.document.contentControls.getByTag(tag)
       ccs.load('items')
@@ -67,11 +81,10 @@ async function waitAndReplace(session, tag, scale) {
       const pic = old.insertInlinePictureFromBase64(j.png, 'Replace')
       pic.lockAspectRatio = true
       pic.width = newWidth
-      pic.altTextDescription = 'OpenMol-Struktur'
-      // Daten zusätzlich im Titel des Alternativtexts: Word codiert über die Schnittstelle eingefügte Bilder
-      // offenbar neu und verliert dabei den Datenblock im PNG – der Titel bleibt erhalten
+      // eine vorhandene Bildbeschreibung bleibt, sonst eine kurze eigene
+      pic.altTextDescription = description || 'OpenMol-Struktur'
       const p = OM_RE.exec(latin1(j.png))?.[0]
-      if (p) pic.altTextTitle = p
+      if (p) pic.altTextTitle = titleFor(p, natural)
       // Hülle wieder entfernen, das Bild bleibt
       cc.delete(true)
       await ctx.sync()
@@ -87,21 +100,28 @@ async function editSelected() {
   try {
     let payload = null
     let scale = 1
+    let description = ''
     const tag = 'openmol-' + Math.random().toString(36).slice(2, 10)
     await Word.run(async (ctx) => {
       const pics = ctx.document.getSelection().inlinePictures
-      pics.load('items/width,items/altTextTitle')
+      pics.load('items/width,items/altTextTitle,items/altTextDescription')
       await ctx.sync()
       if (!pics.items.length) throw new Error('Bitte zuerst ein Bild in Word anklicken (ein Bild im Text, nicht frei schwebend).')
       const pic = pics.items[0]
       const b64 = pic.getBase64ImageSrc()
       await ctx.sync()
       const bin = latin1(b64.value)
-      // Daten im Bild (aus OpenMol kopiert) oder im Titel des Alternativtexts (schon einmal hier ersetzt)
-      payload = OM_RE.exec(bin)?.[0] ?? OM_RE.exec(pic.altTextTitle ?? '')?.[0] ?? null
+      // Daten im Bild (Original aus OpenMol) oder im Titel des Alternativtexts (schon einmal hier ersetzt)
+      const inImage = OM_RE.exec(bin)?.[0] ?? null
+      payload = inImage ?? OM_RE.exec(pic.altTextTitle ?? '')?.[0] ?? null
       if (!payload) throw new Error('Dieses Bild enthält keine OpenMol-Daten. Nur Bilder, die mit OpenMol (ab 1.3.2) kopiert wurden, lassen sich bearbeiten.')
+      // natürliche Breite: aus dem Original-PNG (Auflösung im Bild), sonst aus dem Titel
+      const natural = inImage ? pngWidthPt(bin) : (widthFromTitle(pic.altTextTitle) ?? pngWidthPt(bin))
       // Maßstab merken, damit das neue Bild genauso groß gezeichnet erscheint
-      scale = pic.width / pngWidthPt(bin)
+      scale = pic.width / natural
+      description = pic.altTextDescription ?? ''
+      // Daten gleich doppelt ablegen: übersteht so auch spätere Bildbearbeitung in Word (Zuschneiden, Komprimieren)
+      if (!OM_RE.test(pic.altTextTitle ?? '')) pic.altTextTitle = titleFor(payload, natural)
       // Bild markieren, um es später wiederzufinden (auch wenn die Auswahl inzwischen woanders ist)
       const cc = pic.insertContentControl()
       cc.tag = tag
@@ -110,7 +130,7 @@ async function editSelected() {
     })
     const { session } = await api('/api/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payload }) })
     status('In OpenMol geöffnet. Dort ändern und oben „Zurück nach Word“ klicken …')
-    await waitAndReplace(session, tag, scale)
+    await waitAndReplace(session, tag, scale, description)
   } catch (e) {
     status(e?.message ?? String(e), true)
   } finally {

@@ -16,8 +16,9 @@
     "app:build:win": "npm run build && npm run mcp:bundle && electron-builder --win --publish never && npm run app:check:win",
     "mcp:install": "npm --prefix mcp install --no-audit --no-fund",
     "mcp:bundle": "npm run mcp:install && rolldown mcp/server.mjs --platform node --format esm --file mcp/bundle/server.mjs",
-    "app:release": "npm run app:build && npm run app:build:win && npm run release:draft && electron-builder --mac --publish always && electron-builder --win --publish always",
+    "app:release": "npm run test:clipboard && npm run app:build && npm run app:build:win && npm run release:draft && electron-builder --mac --publish always && electron-builder --win --publish always",
     "release:draft": "node electron/release-draft.mjs",
+    "test:clipboard": "electron electron/test-clipboard.mjs",
     "app:check": "node electron/check-package.mjs release/mac-arm64/OpenMol.app",
     "app:check:win": "node electron/check-package.mjs release/win-unpacked"
   },
@@ -54,6 +55,7 @@
       "!electron/make-icons.mjs",
       "!electron/check-package.mjs",
       "!electron/release-draft.mjs",
+      "!electron/test-clipboard.mjs",
       "package.json"
     ],
     "mac": {
