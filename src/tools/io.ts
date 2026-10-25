@@ -202,7 +202,7 @@ export async function exportPng(scale = 4, transparent = false, onlySelection = 
   }
 }
 
-// ---------- Versuch: Word-Austausch (Bild mit OpenMol-Daten) ----------
+// ---------- Bild mit OpenMol-Daten (Austausch mit Word/PowerPoint) ----------
 
 /** PNG-Textblock (tEXt) direkt nach dem Kopfblock einfügen */
 function pngAddText(png: Uint8Array, keyword: string, text: string): Uint8Array {
@@ -222,28 +222,18 @@ function pngAddText(png: Uint8Array, keyword: string, text: string): Uint8Array 
 }
 
 /**
- * Bild der Auswahl (sonst der ganzen Zeichnung) mit den OpenMol-Daten: PNG mit Textblock „openmol“ = „OM1:…“,
- * dazu die Größe in Bildpunkten (96 dpi) für ein HTML-Bild
+ * Bild der Auswahl (sonst der ganzen Zeichnung) mit den OpenMol-Daten: PNG mit Textblock „openmol“ = „OM1:….“.
+ * Word und PowerPoint speichern das PNG unverändert; aus ihnen zurückkopiert macht OpenMol daraus wieder die Zeichnung.
  */
-export async function imageWithClipData(): Promise<{ png: Uint8Array; payload: string; width: number; height: number } | null> {
+export async function imageWithClipData(): Promise<{ png: Uint8Array; payload: string } | null> {
   const { doc, sel } = getState()
   const only = selectionSize(sel) > 0
   const all = { ...emptySelection(), atoms: Object.keys(doc.atoms), bonds: Object.keys(doc.bonds), arrows: Object.keys(doc.arrows), curved: Object.keys(doc.curved), texts: Object.keys(doc.texts), shapes: Object.keys(doc.shapes), fills: Object.keys(doc.fills ?? {}), cycles: Object.keys(doc.cycles ?? {}), tables: Object.keys(doc.tables ?? {}) }
   const clip = extractClip(doc, completeSel(doc, only ? sel : all))
-  const svg = exportSvgString(doc, { onlySelection: only })
   const blob = await renderPng(only, 4, !doc.style.background)
-  if (!svg || !blob) return null
+  if (!blob) return null
   const payload = await encodeClipPayload(JSON.parse(JSON.stringify(clip)))
-  const png = pngAddText(new Uint8Array(await blob.arrayBuffer()), 'openmol', payload)
-  // 1 Einheit = 0,36 pt = 0,48 px (96 dpi) – so groß wie beim normalen Kopieren
-  return { png, payload, width: Math.round(svg.w * 0.48), height: Math.round(svg.h * 0.48) }
-}
-
-/** HTML-Bild für den Versuch: Bild als data-URI (mit Textblock), Daten zusätzlich im Titel */
-export function clipDataHtml(r: { png: Uint8Array; payload: string; width: number; height: number }): string {
-  let s = ''
-  for (let i = 0; i < r.png.length; i += 0x8000) s += String.fromCharCode(...r.png.subarray(i, i + 0x8000))
-  return `<img src="data:image/png;base64,${btoa(s)}" width="${r.width}" height="${r.height}" alt="OpenMol-Struktur" title="${r.payload}">`
+  return { png: pngAddText(new Uint8Array(await blob.arrayBuffer()), 'openmol', payload), payload }
 }
 
 // ---------- PDF ----------
@@ -305,10 +295,11 @@ export async function copyImageToClipboard(silent = false) {
   const only = selectionSize(sel) > 0
   try {
     // Desktop-App: über den Hauptprozess – die Web-Zwischenablage verlangt ein Fenster im Vordergrund und eine
-    // Nutzeraktion (bei Menübefehlen nicht immer gegeben); schlägt sie fehl, bliebe der alte Inhalt liegen
+    // Nutzeraktion (bei Menübefehlen nicht immer gegeben); schlägt sie fehl, bliebe der alte Inhalt liegen. Das PNG
+    // trägt die OpenMol-Daten (Word/PowerPoint behalten es unverändert): zurückkopiert wird es wieder bearbeitbar
     if (desktop) {
-      const blob = await renderPng(only, 4, !getState().doc.style.background)
-      if (!blob || !(await desktop.clipWrite('png', new Uint8Array(await blob.arrayBuffer())))) throw new Error('leer')
+      const r = await imageWithClipData()
+      if (!r || !(await desktop.clipWrite('png', r.png))) throw new Error('leer')
       if (!silent) toast('Als Bild kopiert – in Word/PowerPoint einfach einfügen')
       return true
     }

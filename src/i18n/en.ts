@@ -4,10 +4,10 @@
 export const EN: Record<string, string> = {
 
   'Weiß (Standard)': 'White (default)',
-  // ---------- Versuch Word-Austausch ----------
-  'Nichts zu kopieren': 'Nothing to copy',
-  'Kopiert (Test {0}) – jetzt in Word einfügen': 'Copied (test {0}) – now paste into Word',
-  'Kopieren fehlgeschlagen': 'Copying failed',
+  // ---------- Austausch mit Word/PowerPoint ----------
+  'Bild aus Word/PowerPoint': 'Image from Word/PowerPoint',
+  'Von OpenMol kopierte Bilder tragen die Zeichnung in sich: dort kopieren, in OpenMol einfügen – wieder bearbeitbar (Desktop-App, Mac)':
+    'Images copied from OpenMol carry the drawing: copy them there, paste into OpenMol – editable again (desktop app, Mac)',
   'Als bearbeitbare Struktur eingefügt (OpenMol-Daten im Bild)': 'Pasted as an editable structure (OpenMol data in the image)',
   // ---------- Seitenlayout / PDF ----------
   Seitenformat: 'Page format',

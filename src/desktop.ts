@@ -29,12 +29,10 @@ export interface DesktopApi {
   writeFile: (p: string, data: string | Uint8Array) => Promise<boolean>
   /** HTML (je Blatt ein SVG) als PDF drucken; Seitengröße in Zoll */
   printPdf: (html: string, size: { width: number; height: number }) => Promise<Uint8Array>
-  /** Versuch Word-Austausch: PNG (roh) bzw. HTML auf die Zwischenablage */
-  clipWrite: (kind: 'png' | 'html', data: Uint8Array | string) => Promise<boolean>
+  /** PNG (mit OpenMol-Daten) unverändert auf die Zwischenablage */
+  clipWrite: (kind: 'png', data: Uint8Array) => Promise<boolean>
   /** OpenMol-Daten („OM1:…“) aus einem beliebigen Format der Zwischenablage, sonst null */
   clipScan: () => Promise<string | null>
-  /** Bericht über alle Formate der Zwischenablage (zeigt einen Dialog) */
-  clipReport: () => Promise<string>
   setDocState: (s: { title: string; dirty: boolean; path?: string }) => void
   closeOk: () => void
   closeCancel: () => void

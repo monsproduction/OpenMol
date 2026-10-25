@@ -24,7 +24,6 @@ contextBridge.exposeInMainWorld('openmol', {
   printPdf: (html, size) => ipcRenderer.invoke('openmol:print-pdf', html, size),
   clipWrite: (kind, data) => ipcRenderer.invoke('openmol:clip-write', kind, data),
   clipScan: () => ipcRenderer.invoke('openmol:clip-scan'),
-  clipReport: () => ipcRenderer.invoke('openmol:clip-report'),
   setDocState: (s) => ipcRenderer.send('openmol:doc-state', s),
   closeOk: () => ipcRenderer.send('openmol:close-ok'),
   closeCancel: () => ipcRenderer.send('openmol:close-cancel'),

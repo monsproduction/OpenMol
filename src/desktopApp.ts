@@ -2,8 +2,7 @@
 // Wird nur gestartet, wenn die Oberfläche in der Desktop-App läuft (siehe main.tsx).
 import { desktop } from './desktop'
 import { getSettings, subscribeSettings } from './settings'
-import { T } from './i18n/i18n'
-import { cycleTab, getState, markSession, redo, setState, setTool, subscribe, toast, toggleInspector, undo } from './store'
+import { cycleTab, getState, markSession, redo, setState, setTool, subscribe, toggleInspector, undo } from './store'
 import {
   cleanStructure,
   contractGroups,
@@ -20,7 +19,7 @@ import {
 } from './tools/actions'
 import { cleanReaction } from './tools/cleanup'
 import { exportCdxml } from './tools/cdxml'
-import { clipDataHtml, closeTab, confirmDiscardAll, copyImageToClipboard, currentFilePath, exportMolfile, exportPdf, exportPng, exportSvg, imageWithClipData, newDocument, openFile, openText, saveDocument } from './tools/io'
+import { closeTab, confirmDiscardAll, copyImageToClipboard, currentFilePath, exportMolfile, exportPdf, exportPng, exportSvg, newDocument, openFile, openText, saveDocument } from './tools/io'
 import { toggleTheme } from './ui/TopBar'
 
 /** Fokus in einem Eingabefeld/bearbeitbaren Text: dort gelten die System-Befehle (Kopieren, Einfügen …) */
@@ -30,14 +29,6 @@ function editingText(): boolean {
 }
 
 const EDIT_CMDS = new Set(['undo', 'redo', 'cut', 'copy', 'paste', 'selectAll', 'delete'])
-
-/** Versuch Word-Austausch: Auswahl (sonst alles) als Bild mit OpenMol-Daten kopieren */
-async function clipTest(kind: 'png' | 'html') {
-  const r = await imageWithClipData()
-  if (!r) return toast(T('Nichts zu kopieren'), 'error')
-  const ok = await desktop!.clipWrite(kind, kind === 'png' ? r.png : clipDataHtml(r))
-  toast(ok ? T('Kopiert (Test {0}) – jetzt in Word einfügen').replace('{0}', kind === 'png' ? '1' : '2') : T('Kopieren fehlgeschlagen'), ok ? 'info' : 'error')
-}
 
 /** Befehl aus der Menüleiste ausführen – mit denselben Funktionen wie Knöpfe und Tastenkürzel */
 export function runMenuCommand(cmd: string) {
@@ -67,9 +58,6 @@ export function runMenuCommand(cmd: string) {
     settings: () => setState({ dialog: 'settings' }),
     help: () => setState({ dialog: 'help' }),
     settingsDir: () => desktop?.showSettingsDir(),
-    clipTestPng: () => clipTest('png'),
-    clipTestHtml: () => clipTest('html'),
-    clipReport: () => desktop?.clipReport(),
     undo,
     redo,
     cut: () => copySelection(true),

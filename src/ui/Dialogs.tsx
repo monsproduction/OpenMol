@@ -760,6 +760,7 @@ const SHORTCUTS: [string, string][] = [
   ['⌘/Strg + Mausrad', 'Zoomen'],
   ['⌘/Strg + Z / ⇧⌘Z', 'Rückgängig / Wiederholen'],
   ['⌘/Strg + C / X / V', 'Kopieren / Ausschneiden / Einfügen (auch SMILES)'],
+  ['Bild aus Word/PowerPoint', 'Von OpenMol kopierte Bilder tragen die Zeichnung in sich: dort kopieren, in OpenMol einfügen – wieder bearbeitbar (Desktop-App, Mac)'],
   ['⌘/Strg + D', 'Duplizieren'],
   ['⌘/Strg + B / I', 'Ausgewählte Atome/Texte fett / kursiv'],
   ['⌘/Strg + A', 'Alles auswählen'],
