@@ -413,14 +413,19 @@ function findPayload(buf) {
   return null
 }
 
-/** prüfen, ob die Nutzlast eine gültige OpenMol-Zeichnung ist (deflate + JSON) */
+/** prüfen, ob die Nutzlast eine gültige OpenMol-Zeichnung ist (deflate + JSON); hinten können bis zu drei Zeichen
+ *  aus der PNG-Prüfsumme hängen (Bilder ohne Endpunkt) – wie beim Einlesen in der Oberfläche abschneiden */
 function validPayload(p) {
-  try {
-    const j = JSON.parse(zlib.inflateSync(Buffer.from(p.slice(4), 'base64url')).toString('utf8'))
-    return j?.format === 'openmol-clip' && Array.isArray(j.clip?.atoms)
-  } catch {
-    return false
+  const body = p.slice(4).replace(/\.$/, '')
+  for (let cut = 0; cut <= 3; cut++) {
+    try {
+      const j = JSON.parse(zlib.inflateSync(Buffer.from(cut ? body.slice(0, -cut) : body, 'base64url')).toString('utf8'))
+      if (j?.format === 'openmol-clip' && Array.isArray(j.clip?.atoms)) return true
+    } catch {
+      // nächste Länge versuchen
+    }
   }
+  return false
 }
 
 /** alle Formate der Zwischenablage lesen (auch die eigenen von Word/PowerPoint) und nach OpenMol-Daten durchsuchen */

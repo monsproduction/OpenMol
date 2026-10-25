@@ -16,17 +16,20 @@ function fromB64url(s: string): Uint8Array {
   return Uint8Array.from(b, (c) => c.charCodeAt(0))
 }
 
-/** Zeichnung → „OM1:…“ (deflate, base64url – nur Zeichen, die in PNG-Textblöcken und HTML-Attributen unverändert bleiben) */
+/**
+ * Zeichnung → „OM1:….“ (deflate, base64url – nur Zeichen, die in PNG-Textblöcken und HTML-Attributen unverändert
+ * bleiben). Der Punkt am Ende beendet die Daten: im PNG folgt sonst die Prüfsumme des Blocks, deren Bytes zufällig
+ * wie weitere Zeichen aussehen können.
+ */
 export async function encodeClipPayload(clip: ClipData): Promise<string> {
   const json = JSON.stringify({ format: 'openmol-clip', version: 1, clip })
   const stream = new Blob([json]).stream().pipeThrough(new CompressionStream('deflate'))
-  return MARK + b64url(new Uint8Array(await new Response(stream).arrayBuffer()))
+  return MARK + b64url(new Uint8Array(await new Response(stream).arrayBuffer())) + '.'
 }
 
-/** „OM1:…“ → Zeichnung (null, wenn beschädigt oder kein OpenMol-Inhalt) */
-export async function decodeClipPayload(payload: string): Promise<ClipData | null> {
+async function decodeOnce(body: string): Promise<ClipData | null> {
   try {
-    const bytes = fromB64url(payload.slice(MARK.length))
+    const bytes = fromB64url(body)
     const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('deflate'))
     const j = JSON.parse(await new Response(stream).text())
     const c = j?.format === 'openmol-clip' ? j.clip : null
@@ -36,6 +39,19 @@ export async function decodeClipPayload(payload: string): Promise<ClipData | nul
   } catch {
     return null
   }
+}
+
+/**
+ * „OM1:…“ → Zeichnung (null, wenn beschädigt oder kein OpenMol-Inhalt). Ohne Endpunkt (ältere Bilder) können hinten
+ * bis zu drei Zeichen aus der PNG-Prüfsumme hängen – dann diese abschneiden.
+ */
+export async function decodeClipPayload(payload: string): Promise<ClipData | null> {
+  const body = payload.slice(MARK.length).replace(/\.$/, '')
+  for (let cut = 0; cut <= 3 && cut < body.length; cut++) {
+    const c = await decodeOnce(cut ? body.slice(0, -cut) : body)
+    if (c) return c
+  }
+  return null
 }
 
 /** erstes „OM1:…“ in einem Text (HTML, Bilddaten als Latin-1 gelesen …) */
