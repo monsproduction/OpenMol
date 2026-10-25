@@ -5,6 +5,14 @@ export const EN: Record<string, string> = {
 
   'Weiß (Standard)': 'White (default)',
   // ---------- Austausch mit Word/PowerPoint ----------
+  'Zurück nach Word': 'Back to Word',
+  'Aus Word': 'From Word',
+  'Die Zeichnung dieses Tabs als Bild an Word geben – das Bild in Word wird ersetzt': 'Send this tab’s drawing to Word as an image – the image in Word is replaced',
+  'Die Zeichnung aus Word konnte nicht gelesen werden': 'The drawing from Word could not be read',
+  'Aus Word geöffnet – nach dem Bearbeiten oben „Zurück nach Word“ klicken': 'Opened from Word – after editing click “Back to Word” at the top',
+  'Die Zeichnung ist leer': 'The drawing is empty',
+  'Word wartet nicht mehr auf dieses Bild – bitte in Word erneut „In OpenMol bearbeiten“': 'Word is no longer waiting for this image – please click “Edit in OpenMol” in Word again',
+  'An Word übergeben – das Bild wird dort ersetzt': 'Sent to Word – the image is being replaced there',
   'Bild aus Word/PowerPoint': 'Image from Word/PowerPoint',
   'Von OpenMol kopierte Bilder tragen die Zeichnung in sich: dort kopieren, in OpenMol einfügen – wieder bearbeitbar (Desktop-App, Mac)':
     'Images copied from OpenMol carry the drawing: copy them there, paste into OpenMol – editable again (desktop app, Mac)',

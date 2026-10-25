@@ -11,6 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { buildMenu, setMenuLang } from './menu.mjs'
 import { initStore } from './store.mjs'
 import { checkForUpdates, scheduleAutoCheck } from './updater.mjs'
+import { setResult, setupWordAddin, startAddinServer } from './wordAddin.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
@@ -167,7 +168,21 @@ function serveApp() {
 }
 
 /** Menüpunkte, die der Hauptprozess selbst ausführt */
-const menuActions = { checkUpdates: () => void checkForUpdates(() => win, { manual: true }) }
+// Word-Add-in: eine Bearbeitung aus Word kommt an → Zeichnung in OpenMol öffnen, Fenster nach vorn
+const addinHandlers = {
+  onEdit: (edit) => {
+    if (!win) createWindow()
+    win.webContents.send('openmol:word-edit', edit)
+    if (win.isMinimized()) win.restore()
+    win.show()
+    win.focus()
+    app.focus({ steal: true })
+  },
+}
+const menuActions = {
+  checkUpdates: () => void checkForUpdates(() => win, { manual: true }),
+  wordAddin: () => void setupWordAddin(win, addinHandlers, !!process.env.OPENMOL_TEST_DIALOGS),
+}
 
 // ---------- Brücke zur Oberfläche ----------
 
@@ -285,6 +300,8 @@ function registerIpc() {
     return true
   })
   ipcMain.handle('openmol:clip-scan', () => scanClipboard())
+  // „Zurück nach Word“: fertiges Bild für die wartende Add-in-Seite bereitlegen
+  ipcMain.handle('openmol:word-result', (_e, session, png) => setResult(String(session), png))
 
   ipcMain.handle('openmol:write-file', async (_e, p, data) => {
     if (!allowed.has(path.resolve(p))) throw new Error('Datei nicht freigegeben')
@@ -460,6 +477,10 @@ app.whenReady().then(() => {
   for (const a of process.argv.slice(1)) if (!a.startsWith('-') && fs.existsSync(a) && isDocFile(a)) sendOpen(a)
   createWindow()
   scheduleAutoCheck(() => win)
+  // Word-Add-in (Mac): Server nur, wenn es schon eingerichtet ist (Menü „Word-Add-in einrichten …“)
+  startAddinServer(addinHandlers)
+  // nur für automatische Tests: Einrichtung ohne Menü und ohne Dialoge
+  if (process.env.OPENMOL_TEST_WORDADDIN) void setupWordAddin(win, addinHandlers, true)
   app.on('activate', () => {
     if (!BrowserWindow.getAllWindows().length) createWindow()
   })

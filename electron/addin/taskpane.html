@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenMol</title>
+    <!-- Office.js muss von Microsoft geladen werden (Vorgabe für Add-ins) -->
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --accent: #2f6bff;
+        --muted: #6b7280;
+      }
+      body {
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        margin: 0;
+        padding: 14px;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+      header img {
+        width: 28px;
+        height: 28px;
+        border-radius: 7px;
+      }
+      header b {
+        font-size: 15px;
+      }
+      button {
+        width: 100%;
+        padding: 9px 12px;
+        border: 0;
+        border-radius: 8px;
+        background: var(--accent);
+        color: #fff;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+      #status {
+        margin-top: 12px;
+        min-height: 3em;
+      }
+      #status.error {
+        color: #d93025;
+      }
+      #conn {
+        color: var(--muted);
+        font-size: 12px;
+        margin-top: 16px;
+      }
+      ol {
+        color: var(--muted);
+        padding-left: 18px;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <header><img src="icon-64.png" alt="" /><b>OpenMol</b></header>
+    <button id="edit" disabled>In OpenMol bearbeiten</button>
+    <div id="status">Lädt …</div>
+    <ol>
+      <li>Ein aus OpenMol kopiertes Bild in Word anklicken.</li>
+      <li>„In OpenMol bearbeiten“ – OpenMol öffnet die Zeichnung.</li>
+      <li>In OpenMol ändern und oben „Zurück nach Word“ klicken – das Bild hier wird ersetzt.</li>
+    </ol>
+    <div id="conn"></div>
+    <script src="taskpane.js"></script>
+  </body>
+</html>

@@ -3,6 +3,7 @@ import { useSyncExternalStore } from 'react'
 import { redo, setState, toggleInspector, undo, useStore } from '../store'
 import { fitView, zoomTo } from '../tools/actions'
 import { newDocument, openFile, saveDocument } from '../tools/io'
+import { sendBackToWord } from '../wordLink'
 import { Icon } from './Icons'
 import { useAiStatus } from '../tools/aiBridge'
 
@@ -47,6 +48,7 @@ export function useTheme() {
 
 export function TopBar() {
   const canUndo = useStore((s) => s.past.length > 0)
+  const fromWord = useStore((s) => !!s.wordTabs[s.activeTab])
   const canRedo = useStore((s) => s.future.length > 0)
   const zoom = useStore((s) => s.view.zoom)
   const fileName = useStore((s) => s.fileName)
@@ -101,6 +103,14 @@ export function TopBar() {
         <div className="top-sep" />
         <Btn icon="undo" title="Rückgängig (⌘Z)" onClick={undo} disabled={!canUndo} />
         <Btn icon="redo" title="Wiederholen (⇧⌘Z)" onClick={redo} disabled={!canRedo} />
+        {fromWord && (
+          <>
+            <div className="top-sep" />
+            <button className="btn primary small word-back" onClick={() => void sendBackToWord()} data-tip="Die Zeichnung dieses Tabs als Bild an Word geben – das Bild in Word wird ersetzt">
+              Zurück nach Word
+            </button>
+          </>
+        )}
       </div>
       <div className="top-group right">
         <Btn icon="zoomOut" title="Verkleinern" onClick={() => zoomTo(zoom / 1.25)} />

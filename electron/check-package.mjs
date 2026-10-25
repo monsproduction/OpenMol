@@ -47,6 +47,8 @@ for (const f of seen) {
   }
 }
 if (!files.has('dist/index.html')) problems.push('fehlt: dist/index.html (Oberfläche)')
+// Word-Add-in: Seite und Symbol, die der Hauptprozess ausliefert (werden nicht importiert, sondern gelesen)
+for (const f of ['electron/addin/taskpane.html', 'electron/addin/taskpane.js', 'electron/addin/icon.png']) if (!files.has(f)) problems.push(`fehlt: ${f} (Word-Add-in)`)
 if (!fs.existsSync(path.join(resources, 'mcp', 'server.mjs'))) problems.push('fehlt: mcp/server.mjs (KI-Server)')
 if (!fs.existsSync(path.join(resources, 'app-update.yml'))) problems.push('fehlt: app-update.yml (Updates)')
 

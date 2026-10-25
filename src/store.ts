@@ -123,6 +123,8 @@ export interface State {
    *  seine Daten liegen oben im Zustand (doc, past, future …) */
   tabs: TabData[]
   activeTab: Id
+  /** Tabs, die eine Zeichnung aus Word bearbeiten: Tab → Sitzung des Word-Add-ins („Zurück nach Word“) */
+  wordTabs: Record<Id, string>
 }
 
 /** ein offenes Dokument mit eigenem Verlauf, eigener Auswahl und Ansicht */
@@ -239,6 +241,7 @@ let state: State = {
   filePath: null,
   tabs: [],
   activeTab: '',
+  wordTabs: {},
 }
 state.activeTab = uid('tab')
 state.tabs = [snapshot(state, state.activeTab)]

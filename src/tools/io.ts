@@ -225,14 +225,14 @@ function pngAddText(png: Uint8Array, keyword: string, text: string): Uint8Array 
  * Bild der Auswahl (sonst der ganzen Zeichnung) mit den OpenMol-Daten: PNG mit Textblock „openmol“ = „OM1:….“.
  * Word und PowerPoint speichern das PNG unverändert; aus ihnen zurückkopiert macht OpenMol daraus wieder die Zeichnung.
  */
-export async function imageWithClipData(): Promise<{ png: Uint8Array; payload: string } | null> {
+export async function imageWithClipData(wholeDrawing = false): Promise<{ png: Uint8Array; payload: string } | null> {
   const { doc, sel } = getState()
-  const only = selectionSize(sel) > 0
+  const only = !wholeDrawing && selectionSize(sel) > 0
   const all = { ...emptySelection(), atoms: Object.keys(doc.atoms), bonds: Object.keys(doc.bonds), arrows: Object.keys(doc.arrows), curved: Object.keys(doc.curved), texts: Object.keys(doc.texts), shapes: Object.keys(doc.shapes), fills: Object.keys(doc.fills ?? {}), cycles: Object.keys(doc.cycles ?? {}), tables: Object.keys(doc.tables ?? {}) }
   const clip = extractClip(doc, completeSel(doc, only ? sel : all))
   const blob = await renderPng(only, 4, !doc.style.background)
   if (!blob) return null
-  const payload = await encodeClipPayload(JSON.parse(JSON.stringify(clip)))
+  const payload = await encodeClipPayload(JSON.parse(JSON.stringify(clip)), doc.style)
   return { png: pngAddText(new Uint8Array(await blob.arrayBuffer()), 'openmol', payload), payload }
 }
 

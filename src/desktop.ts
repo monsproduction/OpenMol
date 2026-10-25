@@ -33,6 +33,10 @@ export interface DesktopApi {
   clipWrite: (kind: 'png', data: Uint8Array) => Promise<boolean>
   /** OpenMol-Daten („OM1:…“) aus einem beliebigen Format der Zwischenablage, sonst null */
   clipScan: () => Promise<string | null>
+  /** Word-Add-in: bearbeitetes Bild (PNG mit Daten) an die wartende Add-in-Seite zurückgeben */
+  wordResult: (session: string, png: Uint8Array) => Promise<boolean>
+  /** Word-Add-in: Bearbeitung aus Word (Sitzung + OpenMol-Daten aus dem Bild) */
+  onWordEdit: (cb: (e: { session: string; payload: string }) => void) => () => void
   setDocState: (s: { title: string; dirty: boolean; path?: string }) => void
   closeOk: () => void
   closeCancel: () => void

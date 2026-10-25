@@ -21,6 +21,7 @@ import { cleanReaction } from './tools/cleanup'
 import { exportCdxml } from './tools/cdxml'
 import { closeTab, confirmDiscardAll, copyImageToClipboard, currentFilePath, exportMolfile, exportPdf, exportPng, exportSvg, newDocument, openFile, openText, saveDocument } from './tools/io'
 import { toggleTheme } from './ui/TopBar'
+import { openFromWord } from './wordLink'
 
 /** Fokus in einem Eingabefeld/bearbeitbaren Text: dort gelten die System-Befehle (Kopieren, Einfügen …) */
 function editingText(): boolean {
@@ -122,6 +123,8 @@ export function startDesktop() {
       console.warn('Datei konnte nicht geöffnet werden', p, e)
     }
   })
+  // Word-Add-in: Bearbeitung aus Word → eigener Tab mit „Zurück nach Word“
+  desktop.onWordEdit((e) => void openFromWord(e))
   desktop.onCloseRequest(async () => {
     if (await confirmDiscardAll()) {
       // ordentlich beendet: beim nächsten Start keine Wiederherstellungs-Frage
