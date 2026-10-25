@@ -4,7 +4,7 @@
 // Aufruf: npx electron electron/test-clipboard.mjs   (überschreibt kurz die Zwischenablage, Text wird zurückgelegt)
 import { app, clipboard } from 'electron'
 import zlib from 'node:zlib'
-import { findPayload, scanClipboard, validPayload, writePng } from './clipboard.mjs'
+import { findPayload, lastWriteMode, scanClipboard, validPayload, writePng } from './clipboard.mjs'
 
 const fails = []
 const check = (name, ok) => {
@@ -75,7 +75,15 @@ app.whenReady().then(async () => {
     if (process.platform === 'darwin') {
       await writePng(pngWithText(payload + '.'))
       check('Zwischenablage: geschrieben und wiedergefunden (Mac, roh als public.png)', (await scanClipboard()) === payload)
-    } else console.log('–      Zwischenablage-Test nur auf dem Mac (Windows schreibt noch ohne Daten)')
+    } else if (process.platform === 'win32') {
+      await writePng(pngWithText(payload + '.'))
+      const types = (await clipboard.read()).flatMap((i) => i.types)
+      console.log('       Weg:', lastWriteMode, '| Formate:', types.join(', '))
+      check('Zwischenablage: geschrieben und wiedergefunden (Windows, Format „PNG“)', (await scanClipboard()) === payload)
+      // Rückfallweg ohne normales Bild: Office geht, andere Programme sehen evtl. nichts – melden, kein Fehler
+      if (lastWriteMode !== 'win-both') console.log('HINWEIS Normales Bild und Daten gingen nicht zusammen – nur das Format „PNG“ (Paint & Co. sehen evtl. kein Bild)')
+      else check('Zwischenablage: normales Bild für andere Programme vorhanden', types.includes('image/png'))
+    } else console.log('–      Zwischenablage-Test nur auf Mac und Windows')
   } catch (e) {
     check('Test lief ohne Fehler: ' + e.message, false)
   } finally {

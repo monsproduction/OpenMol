@@ -14,8 +14,8 @@ export const EN: Record<string, string> = {
   'Word wartet nicht mehr auf dieses Bild – bitte in Word erneut „In OpenMol bearbeiten“': 'Word is no longer waiting for this image – please click “Edit in OpenMol” in Word again',
   'An Word übergeben – das Bild wird dort ersetzt': 'Sent to Word – the image is being replaced there',
   'Bild aus Word/PowerPoint': 'Image from Word/PowerPoint',
-  'Von OpenMol kopierte Bilder tragen die Zeichnung in sich: dort kopieren, in OpenMol einfügen – wieder bearbeitbar (Desktop-App, Mac)':
-    'Images copied from OpenMol carry the drawing: copy them there, paste into OpenMol – editable again (desktop app, Mac)',
+  'Von OpenMol kopierte Bilder tragen die Zeichnung in sich: dort kopieren, in OpenMol einfügen – wieder bearbeitbar (Desktop-App; unter Windows noch ungetestet)':
+    'Images copied from OpenMol carry the drawing: copy them there, paste into OpenMol – editable again (desktop app; not yet tested on Windows)',
   'Als bearbeitbare Struktur eingefügt (OpenMol-Daten im Bild)': 'Pasted as an editable structure (OpenMol data in the image)',
   // ---------- Seitenlayout / PDF ----------
   Seitenformat: 'Page format',

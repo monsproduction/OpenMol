@@ -1,8 +1,10 @@
-// Word-Add-in „OpenMol“ (Mac): In Word ein OpenMol-Bild markieren → „In OpenMol bearbeiten“ → OpenMol öffnet die
+// Word-Add-in „OpenMol“ (Mac, Windows UNGETESTET): In Word ein OpenMol-Bild markieren → „In OpenMol bearbeiten“ → OpenMol öffnet die
 // Zeichnung in einem Tab → „Zurück nach Word“ ersetzt das Bild. Word zeigt Add-ins in einer Safari-Webansicht, die
 // von einer HTTPS-Seite aus kein http://localhost erreicht (getestet unter macOS 26) – deshalb liefert OpenMol Add-in
 // und Verbindung selbst über https://localhost:5185, mit einem Zertifikat nur für localhost, dem der Nutzer einmal
 // vertraut. Die Zeichnung steckt im PNG selbst (Textblock „openmol“, siehe src/tools/clipData.ts).
+// Windows: Zertifikat mit Node erzeugt (kein openssl), Vertrauen über die Windows-Zertifikatsverwaltung (certutil, nur
+// für den Benutzer – Windows fragt selbst nach), Add-in über den Registry-Eintrag für Entwickler-Add-ins (WEF\Developer).
 import { app, dialog, nativeImage } from 'electron'
 import { execFile } from 'node:child_process'
 import crypto from 'node:crypto'
@@ -11,6 +13,7 @@ import https from 'node:https'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { makeSelfSignedCert, thumbprint } from './selfsignedCert.mjs'
 
 export const ADDIN_PORT = 5185
 const ORIGIN = `https://localhost:${ADDIN_PORT}`
@@ -19,15 +22,31 @@ const STATIC = path.join(path.dirname(fileURLToPath(import.meta.url)), 'addin')
 const dir = () => path.join(app.getPath('userData'), 'word-addin')
 const certFile = () => path.join(dir(), 'localhost-cert.pem')
 const keyFile = () => path.join(dir(), 'localhost-key.pem')
+/** dasselbe Zertifikat in DER – so liest es die Windows-Zertifikatsverwaltung */
+const cerFile = () => path.join(dir(), 'localhost-cert.cer')
+const WIN = process.platform === 'win32'
+const SUPPORTED = process.platform === 'darwin' || WIN
 /** Ordner, aus dem Word für Mac selbst installierte Add-ins lädt (Sideloading) */
 const wefDir = () => path.join(os.homedir(), 'Library', 'Containers', 'com.microsoft.Word', 'Data', 'Documents', 'wef')
+/** Windows: Manifest liegt bei OpenMol, Word findet es über den Registry-Eintrag */
+const manifestFile = () => (WIN ? path.join(dir(), 'OpenMol-Word-Addin.xml') : path.join(wefDir(), 'OpenMol-Word-Addin.xml'))
+const WEF_KEY = 'HKCU\\Software\\Microsoft\\Office\\16.0\\WEF\\Developer'
+const sys32 = (exe) => path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', exe)
+const POWERSHELL = () => path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe')
 
-const run = (cmd, args) =>
-  new Promise((resolve) => execFile(cmd, args, (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) })))
+const run = (cmd, args, opts = {}) =>
+  new Promise((resolve) => execFile(cmd, args, opts, (err, stdout, stderr) => resolve({ ok: !err, out: String(stdout) + String(stderr) || (err?.message ?? '') })))
 
 /** Zertifikat nur für localhost/127.0.0.1 (keine Zertifizierungsstelle, nur Webserver, 825 Tage – Apples Grenze) */
 async function makeCert() {
   fs.mkdirSync(dir(), { recursive: true })
+  if (WIN) {
+    const c = makeSelfSignedCert()
+    fs.writeFileSync(keyFile(), c.keyPem)
+    fs.writeFileSync(certFile(), c.certPem)
+    fs.writeFileSync(cerFile(), c.der)
+    return
+  }
   const r = await run('/usr/bin/openssl', [
     'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '825',
     '-keyout', keyFile(), '-out', certFile(), '-subj', '/CN=OpenMol localhost',
@@ -40,9 +59,34 @@ async function makeCert() {
   fs.chmodSync(keyFile(), 0o600)
 }
 
-/** vertraut macOS dem Zertifikat für HTTPS auf localhost? */
+/** Fingerabdruck des aktuellen Zertifikats (Windows benennt Zertifikate im Speicher danach) */
+function certThumbprint() {
+  return thumbprint(new crypto.X509Certificate(fs.readFileSync(certFile())).raw)
+}
+
+/** vertraut macOS bzw. Windows dem Zertifikat für HTTPS auf localhost? */
 async function certTrusted() {
+  if (WIN) {
+    let t
+    try {
+      t = certThumbprint()
+    } catch {
+      return false
+    }
+    const r = await run(POWERSHELL(), ['-NoProfile', '-NonInteractive', '-Command', `Test-Path 'Cert:\\CurrentUser\\Root\\${t}'`], { windowsHide: true })
+    return r.ok && /True/i.test(r.out)
+  }
   return (await run('/usr/bin/security', ['verify-cert', '-c', certFile(), '-p', 'ssl', '-s', 'localhost', '-q'])).ok
+}
+
+/** Add-in bei Word eintragen: Mac – Manifest in den wef-Ordner; Windows – Manifest + Registry-Eintrag (nur Benutzer) */
+async function installManifest() {
+  fs.mkdirSync(path.dirname(manifestFile()), { recursive: true })
+  fs.writeFileSync(manifestFile(), manifestXml())
+  if (!WIN) return
+  // Wert: Name und Inhalt = Pfad des Manifests (so trägt auch Microsofts Werkzeug office-addin-dev-settings ein)
+  const r = await run(sys32('reg.exe'), ['add', WEF_KEY, '/v', manifestFile(), '/t', 'REG_SZ', '/d', manifestFile(), '/f'], { windowsHide: true })
+  if (!r.ok) throw new Error('Registry-Eintrag für Word fehlgeschlagen: ' + r.out)
 }
 
 function manifestXml() {
@@ -215,7 +259,7 @@ export function startAddinServer(handlers) {
   if (server) return Promise.resolve('ok')
   // läuft gerade ein Start (Einrichtung und Startprüfung gleichzeitig), auf denselben warten
   if (starting) return starting
-  if (process.platform !== 'darwin' || !fs.existsSync(certFile()) || !fs.existsSync(keyFile())) return Promise.resolve('none')
+  if (!SUPPORTED || !fs.existsSync(certFile()) || !fs.existsSync(keyFile())) return Promise.resolve('none')
   starting = new Promise((resolve) => {
     const srv = https.createServer({ cert: fs.readFileSync(certFile()), key: fs.readFileSync(keyFile()) }, (req, res) => {
       handle(req, res).catch(() => send(res, 500, { error: 'Fehler' }))
@@ -256,7 +300,7 @@ const PORT_BUSY = `Ein anderes Programm benutzt den Anschluss ${ADDIN_PORT} auf 
  * starten, einen belegten Anschluss melden. Nur wenn das Add-in eingerichtet ist.
  */
 export async function checkWordAddinOnStart(win, handlers, test) {
-  if (process.platform !== 'darwin' || !fs.existsSync(certFile())) return
+  if (!SUPPORTED || !fs.existsSync(certFile())) return
   const days = certDaysLeft()
   let renewed = false
   if (days === null || days < 30) {
@@ -267,6 +311,8 @@ export async function checkWordAddinOnStart(win, handlers, test) {
       console.error('OpenMol: Zertifikat erneuern', e)
     }
   }
+  // Windows: Manifest bei jedem Start erneuern (Word liest es aus dem OpenMol-Ordner)
+  if (WIN) await installManifest().catch((e) => console.error('OpenMol: Word-Add-in eintragen', e))
   const state = await startAddinServer(handlers)
   if (test) {
     console.log('[word-addin] Start', { daysLeft: days === null ? null : Math.round(days), renewed, server: state })
@@ -288,22 +334,21 @@ export function setResult(session, png) {
  * das Vertrauen in das Zertifikat einrichten lassen (macOS fragt dafür selbst nach dem Passwort).
  */
 export async function setupWordAddin(win, handlers, test) {
-  if (process.platform !== 'darwin') return
+  if (!SUPPORTED) return
   let state
   try {
-    if (!fs.existsSync(certFile()) || !fs.existsSync(keyFile()) || (certDaysLeft() ?? -1) < 30) {
+    if (!fs.existsSync(certFile()) || !fs.existsSync(keyFile()) || (WIN && !fs.existsSync(cerFile())) || (certDaysLeft() ?? -1) < 30) {
       stopAddinServer()
       await makeCert()
     }
-    fs.mkdirSync(wefDir(), { recursive: true })
-    fs.writeFileSync(path.join(wefDir(), 'OpenMol-Word-Addin.xml'), manifestXml())
+    await installManifest()
     state = await startAddinServer(handlers)
   } catch (e) {
     if (!test) await dialog.showMessageBox(win, { type: 'error', message: 'Word-Add-in konnte nicht eingerichtet werden', detail: String(e?.message ?? e) })
     return
   }
   if (test) {
-    console.log('[word-addin] eingerichtet', { manifest: path.join(wefDir(), 'OpenMol-Word-Addin.xml'), trusted: await certTrusted(), server: state, command: trustCommand() })
+    console.log('[word-addin] eingerichtet', { manifest: manifestFile(), trusted: await certTrusted(), server: state, command: trustCommand() })
     return
   }
   if (state === 'busy') return void (await dialog.showMessageBox(win, { type: 'warning', message: 'Word-Add-in nicht verfügbar', detail: PORT_BUSY, buttons: ['OK'] }))
@@ -314,21 +359,26 @@ export async function setupWordAddin(win, handlers, test) {
   await askTrust(win, false)
 }
 
-const HOW_TO =
-  'Word danach ganz beenden (⌘Q) und neu starten. Dann in Word: Reiter „Einfügen“, beim Knopf „Meine Add-Ins“ auf den kleinen Pfeil ▾ klicken und unter „Entwickler-Add-Ins“ „OpenMol“ wählen. Danach erscheint im Reiter „Start“ der Knopf „In OpenMol bearbeiten“.'
+const HOW_TO = WIN
+  ? 'Word danach ganz beenden und neu starten. Im Reiter „Start“ sollte dann der Knopf „In OpenMol bearbeiten“ erscheinen. Falls nicht: Reiter „Einfügen“ ▸ „Add-Ins abrufen“ bzw. „Meine Add-Ins“ ▸ „Entwickler-Add-Ins“ ▸ „OpenMol“.'
+  : 'Word danach ganz beenden (⌘Q) und neu starten. Dann in Word: Reiter „Einfügen“, beim Knopf „Meine Add-Ins“ auf den kleinen Pfeil ▾ klicken und unter „Entwickler-Add-Ins“ „OpenMol“ wählen. Danach erscheint im Reiter „Start“ der Knopf „In OpenMol bearbeiten“.'
 
-const trustCommand = () => `security add-trusted-cert -r trustRoot -p ssl -k ~/Library/Keychains/login.keychain-db "${certFile()}"`
+const trustCommand = () =>
+  WIN ? `certutil -user -addstore Root "${cerFile()}"` : `security add-trusted-cert -r trustRoot -p ssl -k ~/Library/Keychains/login.keychain-db "${certFile()}"`
 
-/** Vertrauen in das Zertifikat einrichten lassen (macOS fragt dafür selbst nach dem Passwort) */
+/** Vertrauen in das Zertifikat einrichten lassen (macOS fragt dafür selbst nach dem Passwort, Windows mit einer Sicherheitswarnung) */
 async function askTrust(win, renewed) {
+  const pc = WIN ? 'Windows' : 'dein Mac'
   const r = await dialog.showMessageBox(win, {
     type: 'info',
-    message: renewed ? 'Das Zertifikat für das Word-Add-in wurde erneuert' : 'Dein Mac muss dem OpenMol-Zertifikat einmal vertrauen',
+    message: renewed ? 'Das Zertifikat für das Word-Add-in wurde erneuert' : `${WIN ? 'Windows' : 'Dein Mac'} muss dem OpenMol-Zertifikat einmal vertrauen`,
     detail:
       (renewed
-        ? 'Das bisherige Zertifikat lief bald ab. Damit „In OpenMol bearbeiten“ in Word weiter funktioniert, muss dein Mac dem neuen einmal vertrauen. '
+        ? `Das bisherige Zertifikat lief bald ab. Damit „In OpenMol bearbeiten“ in Word weiter funktioniert, muss ${pc} dem neuen einmal vertrauen. `
         : 'Word zeigt Add-ins nur über HTTPS an. OpenMol hat dafür ein Zertifikat erzeugt, das ausschließlich für „localhost“ (diesen Rechner) gilt und nichts anderes beglaubigen kann. ') +
-      '„Vertrauen …“ trägt es in deinen Schlüsselbund ein – macOS fragt dabei nach deinem Passwort.\n\nAlternativ im Terminal:\n' +
+      (WIN
+        ? '„Vertrauen …“ trägt es in die Zertifikate deines Windows-Benutzers ein – Windows zeigt dabei eine Sicherheitswarnung („Möchten Sie dieses Zertifikat installieren?“), die du mit „Ja“ bestätigst.\n\nAlternativ in der Eingabeaufforderung:\n'
+        : '„Vertrauen …“ trägt es in deinen Schlüsselbund ein – macOS fragt dabei nach deinem Passwort.\n\nAlternativ im Terminal:\n') +
       trustCommand(),
     buttons: ['Vertrauen …', 'Befehl in Zwischenablage', 'Später'],
     cancelId: 2,
@@ -339,12 +389,15 @@ async function askTrust(win, renewed) {
     return
   }
   if (r.response !== 0) return
-  const t = await run('/usr/bin/security', ['add-trusted-cert', '-r', 'trustRoot', '-p', 'ssl', '-k', path.join(os.homedir(), 'Library', 'Keychains', 'login.keychain-db'), certFile()])
+  // Windows: ohne windowsHide, damit die Sicherheitswarnung sicher erscheint
+  const t = WIN
+    ? await run(sys32('certutil.exe'), ['-user', '-addstore', 'Root', cerFile()])
+    : await run('/usr/bin/security', ['add-trusted-cert', '-r', 'trustRoot', '-p', 'ssl', '-k', path.join(os.homedir(), 'Library', 'Keychains', 'login.keychain-db'), certFile()])
   const ok = await certTrusted()
   await dialog.showMessageBox(win, {
     type: ok ? 'info' : 'warning',
     message: ok ? 'Fertig – das Word-Add-in ist eingerichtet.' : 'Das Zertifikat ist noch nicht vertrauenswürdig.',
-    detail: ok ? (renewed ? 'Word einmal neu starten.' : HOW_TO) : (t.out || 'Abgebrochen?') + '\n\nBefehl zum Wiederholen im Terminal:\n' + trustCommand(),
+    detail: ok ? (renewed ? 'Word einmal neu starten.' : HOW_TO) : (t.out || 'Abgebrochen?') + `\n\nBefehl zum Wiederholen ${WIN ? 'in der Eingabeaufforderung' : 'im Terminal'}:\n` + trustCommand(),
     buttons: ['OK'],
   })
 }

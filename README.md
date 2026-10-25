@@ -69,10 +69,14 @@ Windows: siehe [WINDOWS.md](WINDOWS.md) (Installer vorbereitet, auf Windows noch
   grüner Hotspot merkt sich die Stelle, Pfeiltasten wandern weiter (`1B79←←←←o↓↓↓↓o→→9` = Pinakolboronat), Enter macht
   die Auswahl zum Hotspot, Leertaste/Tab das Molekül zur Auswahl; ⌘+Pfeil Reaktions-Kürzel, ⌥+Pfeil drehen (15°/1°),
   ⇧⌥+Pfeil 3D-Drehung
-- Austausch mit Word/PowerPoint (Desktop-App, Mac): kopierte Bilder tragen die Zeichnung in sich (PNG-Textblock
-  „openmol“). Word/PowerPoint behalten das PNG unverändert – das Bild dort kopieren und in OpenMol einfügen, schon ist
-  die Struktur wieder bearbeitbar. Ein Doppelklick in Word, der OpenMol öffnet, ist auf dem Mac nicht möglich
-  (OLE gibt es dort für Fremdprogramme nicht); unter Windows ist der Datenweg noch nicht eingebaut.
+- Austausch mit Word/PowerPoint (Desktop-App): kopierte Bilder tragen die Zeichnung in sich (PNG-Textblock
+  „openmol“). Word/PowerPoint für Mac behalten das PNG unverändert – das Bild dort kopieren und in OpenMol einfügen,
+  schon ist die Struktur wieder bearbeitbar. Unter Windows legt OpenMol das PNG zusätzlich im Office-Format „PNG“ ab
+  (eingebaut, noch ungetestet – siehe [WINDOWS.md](WINDOWS.md)).
+- Word-Add-in „In OpenMol bearbeiten“ (Datei ▸ Word-Add-in einrichten …): Bild in Word markieren → OpenMol öffnet die
+  Zeichnung in einem Tab → „Zurück nach Word“ ersetzt das Bild. OpenMol liefert das Add-in selbst über
+  `https://localhost:5185` aus (eigenes Zertifikat nur für localhost, dem der Rechner einmal vertraut). Auf dem Mac
+  getestet, unter Windows eingebaut, aber noch ungetestet. Nur Bilder im Text (nicht frei schwebend).
 - Tabs: mehrere Dokumente gleichzeitig (⌘N/⌘T neu, ⌘W schließen, Strg+Tab wechseln), jedes mit eigenem Verlauf;
   beim Beenden eine gemeinsame Liste aller ungesicherten Dokumente
 - Seitenformate im Dokument-Stil (A0–A6, US Letter/Legal, PowerPoint 16:9/4:3, Poster) im ChemDraw-Maßstab

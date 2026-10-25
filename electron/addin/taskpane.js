@@ -113,7 +113,7 @@ async function editSelected() {
       const bin = latin1(b64.value)
       // Daten im Bild (Original aus OpenMol) oder im Titel des Alternativtexts (schon einmal hier ersetzt)
       const inImage = OM_RE.exec(bin)?.[0] ?? null
-      payload = inImage ?? OM_RE.exec(pic.altTextTitle ?? '')?.[0] ?? null
+      payload = inImage ?? OM_RE.exec(pic.altTextTitle ?? '')?.[0] ?? OM_RE.exec(pic.altTextDescription ?? '')?.[0] ?? null
       if (!payload) throw new Error('Dieses Bild enthält keine OpenMol-Daten. Nur Bilder, die mit OpenMol (ab 1.3.2) kopiert wurden, lassen sich bearbeiten.')
       // natürliche Breite: aus dem Original-PNG (Auflösung im Bild), sonst aus dem Titel
       const natural = inImage ? pngWidthPt(bin) : (widthFromTitle(pic.altTextTitle) ?? pngWidthPt(bin))

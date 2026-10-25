@@ -4,14 +4,37 @@
 import { clipboard, ClipboardItem } from 'electron'
 import zlib from 'node:zlib'
 
+const RAW = (format) => `electron application/osclipboard;format="${format}"`
+
+/** wie die Zwischenablage zuletzt beschrieben wurde (für test-clipboard.mjs) */
+export let lastWriteMode = ''
+
 /**
  * PNG mit Datenblock auf die Zwischenablage. Mac: roh als public.png – als image/png würde Chromium es neu codieren
- * und den Datenblock verwerfen; Word und PowerPoint für Mac behalten es unverändert (getestet). Windows: vorerst als
- * normales Bild (ohne Daten), bis der Rohweg dort getestet ist (andere Programme brauchen dort zusätzlich Bitmaps).
+ * und den Datenblock verwerfen; Word und PowerPoint für Mac behalten es unverändert (getestet).
+ * Windows (UNGETESTET): normales Bild (Chromium legt daraus die Bitmap für Paint, Teams … ab) und zusätzlich roh im
+ * Format „PNG“, das Office liest und selbst schreibt. Auf dem Mac setzt sich in einem gemeinsamen Eintrag das Rohformat
+ * gegen das von Chromium neu codierte PNG durch (getestet) – ob das unter Windows auch so ist, prüft der Rückleseversuch:
+ * fehlen die Daten, nur das rohe „PNG“ (Office behält die Daten, andere Programme sehen dann evtl. kein Bild).
  */
 export async function writePng(data) {
-  const type = process.platform === 'darwin' ? 'electron application/osclipboard;format="public.png"' : 'image/png'
-  await clipboard.write([new ClipboardItem({ [type]: new Blob([Buffer.from(data)], { type: 'image/png' }) })])
+  const blob = () => new Blob([Buffer.from(data)], { type: 'image/png' })
+  if (process.platform === 'darwin') {
+    await clipboard.write([new ClipboardItem({ [RAW('public.png')]: blob() })])
+    lastWriteMode = 'mac-raw'
+    return true
+  }
+  if (process.platform !== 'win32') {
+    await clipboard.write([new ClipboardItem({ 'image/png': blob() })])
+    lastWriteMode = 'plain'
+    return true
+  }
+  const want = findPayload(Buffer.from(data))
+  await clipboard.write([new ClipboardItem({ 'image/png': blob(), [RAW('PNG')]: blob() })])
+  lastWriteMode = 'win-both'
+  if (!want || (await scanClipboard()) === want) return true
+  await clipboard.write([new ClipboardItem({ [RAW('PNG')]: blob() })])
+  lastWriteMode = 'win-raw-only'
   return true
 }
 
@@ -82,12 +105,12 @@ export function validPayload(p) {
 /**
  * Formate der Zwischenablage (auch die eigenen von Word/PowerPoint, z. B. com.microsoft.Art--GVML-ClipFormat) nach
  * OpenMol-Daten durchsuchen; Rückgabe: erste gültige Nutzlast oder null. Nur gerenderte Bilder (TIFF – oft mehrere MB –,
- * PDF, JPEG) werden übersprungen: darin stecken nie Daten.
+ * PDF, JPEG, unter Windows Bitmaps und Metafiles) werden übersprungen: darin stecken nie Daten.
  */
 export async function scanClipboard() {
   for (const item of await clipboard.read()) {
     for (const type of item.types) {
-      if (/tiff|pdf|jpeg|findtext/i.test(type)) continue
+      if (/tiff|pdf|jpeg|findtext|bmp|dib|bitmap|metafile|emf|wmf/i.test(type)) continue
       let buf
       try {
         buf = Buffer.from(await (await item.getType(type)).arrayBuffer())

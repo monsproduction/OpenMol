@@ -175,7 +175,12 @@ const addinHandlers = {
     win.webContents.send('openmol:word-edit', edit)
     if (win.isMinimized()) win.restore()
     win.show()
-    win.focus()
+    if (process.platform === 'win32') {
+      // Windows holt ein Fenster eines anderen Programms sonst nicht nach vorn (blinkt nur in der Taskleiste) – UNGETESTET
+      win.setAlwaysOnTop(true)
+      win.focus()
+      win.setAlwaysOnTop(false)
+    } else win.focus()
     app.focus({ steal: true })
   },
 }

@@ -1,4 +1,4 @@
-// Bearbeiten aus Word (Word-Add-in, Mac): eine Zeichnung aus Word kommt in einen eigenen Tab; „Zurück nach Word“
+// Bearbeiten aus Word (Word-Add-in, Mac und Windows): eine Zeichnung aus Word kommt in einen eigenen Tab; „Zurück nach Word“
 // gibt das neue Bild (PNG mit OpenMol-Daten) an das wartende Add-in, das es in Word ersetzt. Siehe electron/wordAddin.mjs.
 import { desktop } from './desktop'
 import { T } from './i18n/i18n'

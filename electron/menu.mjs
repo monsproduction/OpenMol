@@ -186,7 +186,8 @@ export function buildMenu(getWin, actions = {}) {
           label: t.export,
           submenu: [item(t.exportDialog, 'exportDialog', 'CmdOrCtrl+E'), { type: 'separator' }, item(t.pdf, 'exportPdf'), item(t.png, 'exportPng'), item(t.svg, 'exportSvg'), item(t.mol, 'exportMol'), item(t.cdxml, 'exportCdxml')],
         },
-        ...(mac ? [{ type: 'separator' }, { label: t.wordAddin, click: () => actions.wordAddin?.() }] : []),
+        // Word-Add-in: Mac und Windows (unter Linux gibt es kein Word)
+        ...(mac || process.platform === 'win32' ? [{ type: 'separator' }, { label: t.wordAddin, click: () => actions.wordAddin?.() }] : []),
         ...(mac ? [] : [{ type: 'separator' }, item(t.settings, 'settings', 'CmdOrCtrl+,'), { role: 'quit' }]),
       ],
     },
