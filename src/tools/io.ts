@@ -1,15 +1,16 @@
 // Export/Import: SVG, PNG, Molfile, SMILES, eigenes JSON-Format
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { selectionAtomIds } from '../model/ops'
+import { extractClip, selectionAtomIds } from '../model/ops'
 import { toMolfile, toSmiles } from '../model/ocl'
 import { getScene, sceneBBox } from '../model/scene'
 import { PT_PER_UNIT, pageRects } from '../model/pages'
 import type { Doc } from '../model/types'
-import { normalizeDoc, safeColor, selectionSize } from '../model/types'
+import { emptySelection, normalizeDoc, safeColor, selectionSize } from '../model/types'
 import { DocContent } from '../render/DocSvg'
 import { allTabs, getState, openTab, removeTab, replaceDoc, setState, switchTab, toast } from '../store'
-import { fitView, insertStructureText } from './actions'
+import { completeSel, fitView, insertStructureText } from './actions'
+import { encodeClipPayload } from './clipData'
 import { T } from '../i18n/i18n'
 import { desktop, type FileFilter } from '../desktop'
 
@@ -153,7 +154,7 @@ const CRC_TABLE = (() => {
   return t
 })()
 
-function crc32(bytes: Uint8Array): number {
+export function crc32(bytes: Uint8Array): number {
   let c = 0xffffffff
   for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8)
   return (c ^ 0xffffffff) >>> 0
@@ -199,6 +200,50 @@ export async function exportPng(scale = 4, transparent = false, onlySelection = 
   } catch (e) {
     toast(String(e), 'error')
   }
+}
+
+// ---------- Versuch: Word-Austausch (Bild mit OpenMol-Daten) ----------
+
+/** PNG-Textblock (tEXt) direkt nach dem Kopfblock einfügen */
+function pngAddText(png: Uint8Array, keyword: string, text: string): Uint8Array {
+  const data = new TextEncoder().encode(keyword + '\0' + text)
+  const chunk = new Uint8Array(12 + data.length)
+  const dv = new DataView(chunk.buffer)
+  dv.setUint32(0, data.length)
+  chunk.set([0x74, 0x45, 0x58, 0x74], 4) // "tEXt"
+  chunk.set(data, 8)
+  dv.setUint32(8 + data.length, crc32(chunk.subarray(4, 8 + data.length)))
+  const at = 33 // nach Signatur (8) + IHDR (25)
+  const out = new Uint8Array(png.length + chunk.length)
+  out.set(png.subarray(0, at), 0)
+  out.set(chunk, at)
+  out.set(png.subarray(at), at + chunk.length)
+  return out
+}
+
+/**
+ * Bild der Auswahl (sonst der ganzen Zeichnung) mit den OpenMol-Daten: PNG mit Textblock „openmol“ = „OM1:…“,
+ * dazu die Größe in Bildpunkten (96 dpi) für ein HTML-Bild
+ */
+export async function imageWithClipData(): Promise<{ png: Uint8Array; payload: string; width: number; height: number } | null> {
+  const { doc, sel } = getState()
+  const only = selectionSize(sel) > 0
+  const all = { ...emptySelection(), atoms: Object.keys(doc.atoms), bonds: Object.keys(doc.bonds), arrows: Object.keys(doc.arrows), curved: Object.keys(doc.curved), texts: Object.keys(doc.texts), shapes: Object.keys(doc.shapes), fills: Object.keys(doc.fills ?? {}), cycles: Object.keys(doc.cycles ?? {}), tables: Object.keys(doc.tables ?? {}) }
+  const clip = extractClip(doc, completeSel(doc, only ? sel : all))
+  const svg = exportSvgString(doc, { onlySelection: only })
+  const blob = await renderPng(only, 4, !doc.style.background)
+  if (!svg || !blob) return null
+  const payload = await encodeClipPayload(JSON.parse(JSON.stringify(clip)))
+  const png = pngAddText(new Uint8Array(await blob.arrayBuffer()), 'openmol', payload)
+  // 1 Einheit = 0,36 pt = 0,48 px (96 dpi) – so groß wie beim normalen Kopieren
+  return { png, payload, width: Math.round(svg.w * 0.48), height: Math.round(svg.h * 0.48) }
+}
+
+/** HTML-Bild für den Versuch: Bild als data-URI (mit Textblock), Daten zusätzlich im Titel */
+export function clipDataHtml(r: { png: Uint8Array; payload: string; width: number; height: number }): string {
+  let s = ''
+  for (let i = 0; i < r.png.length; i += 0x8000) s += String.fromCharCode(...r.png.subarray(i, i + 0x8000))
+  return `<img src="data:image/png;base64,${btoa(s)}" width="${r.width}" height="${r.height}" alt="OpenMol-Struktur" title="${r.payload}">`
 }
 
 // ---------- PDF ----------
@@ -259,6 +304,14 @@ export async function copyImageToClipboard(silent = false) {
   const { sel } = getState()
   const only = selectionSize(sel) > 0
   try {
+    // Desktop-App: über den Hauptprozess – die Web-Zwischenablage verlangt ein Fenster im Vordergrund und eine
+    // Nutzeraktion (bei Menübefehlen nicht immer gegeben); schlägt sie fehl, bliebe der alte Inhalt liegen
+    if (desktop) {
+      const blob = await renderPng(only, 4, !getState().doc.style.background)
+      if (!blob || !(await desktop.clipWrite('png', new Uint8Array(await blob.arrayBuffer())))) throw new Error('leer')
+      if (!silent) toast('Als Bild kopiert – in Word/PowerPoint einfach einfügen')
+      return true
+    }
     // Promise im ClipboardItem: funktioniert auch in Safari innerhalb der Nutzeraktion. Transparenter Hintergrund
     // (passt auf farbige Folien), außer das Dokument hat eine eigene Hintergrundfarbe; weiß gefüllte Objekte bleiben weiß
     const png = renderPng(only, 4, !getState().doc.style.background).then((b) => {

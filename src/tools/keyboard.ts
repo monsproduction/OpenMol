@@ -2,7 +2,7 @@ import { deleteItems, translateSelection } from '../model/ops'
 import { emptySelection, selectionSize } from '../model/types'
 import type { Doc, Id } from '../model/types'
 import { parseRich, serializeRich, type Run } from '../model/richtext'
-import { clipboard, commit, getState, redo, setState, setTool, toggleInspector, undo, type Hotspot } from '../store'
+import { clipboard, commit, getState, redo, setState, setTool, toast, toggleInspector, undo, type Hotspot } from '../store'
 import {
   arrange,
   toggleBold,
@@ -22,6 +22,9 @@ import {
 import { cleanReaction } from './cleanup'
 import { ATOM_KEYS, BOND_KEYS, atomHotkey, bondHotkey, grabHotspot, hotspotFromSelection, liveHotspot, moveHotspot, reactionShortcut, selectHotspotMolecule } from './hotkeys'
 import { openFile, saveDocument } from './io'
+import { decodeClipPayload, findClipPayload } from './clipData'
+import { desktop } from '../desktop'
+import { T } from '../i18n/i18n'
 
 const ELEMENT_KEYS: Record<string, string> = {
   c: 'C',
@@ -440,8 +443,35 @@ export function handlePaste(e: ClipboardEvent) {
   if (t && (t.isContentEditable || t.closest?.('[contenteditable="true"], [contenteditable=""]'))) return pasteIntoRichField(e)
   if (getState().dialog) return
   const text = e.clipboardData?.getData('text/plain') ?? ''
+  const html = e.clipboardData?.getData('text/html') ?? ''
+  const images = [...(e.clipboardData?.files ?? [])].filter((f) => f.type.startsWith('image/'))
   e.preventDefault()
   const at = lastPointer ?? viewCenter()
+  // Bild mit OpenMol-Daten (z. B. aus Word zurückkopiert): wieder als bearbeitbare Zeichnung einfügen
+  void (async () => {
+    let payload = desktop ? await desktop.clipScan().catch(() => null) : null
+    payload ??= findClipPayload(html)
+    for (const f of images) {
+      if (payload) break
+      const bytes = new Uint8Array(await f.arrayBuffer())
+      let s = ''
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+      payload = findClipPayload(s)
+    }
+    const clip = payload ? await decodeClipPayload(payload) : null
+    if (clip) {
+      clipboard.data = clip
+      clipboard.pasteCount = 0
+      pasteInternal(at)
+      toast(T('Als bearbeitbare Struktur eingefügt (OpenMol-Daten im Bild)'))
+      return
+    }
+    pasteOrdinary(text, at)
+  })()
+}
+
+/** Einfügen ohne OpenMol-Daten im Bild: eigene Zwischenablage, SMILES oder Molfile */
+function pasteOrdinary(text: string, at: { x: number; y: number }) {
   // Wenn die System-Zwischenablage noch unseren eigenen SMILES-Export enthält → interne Daten (mit Pfeilen etc.)
   if (clipboard.data && (!text || text === clipboard.smiles)) {
     pasteInternal(at)

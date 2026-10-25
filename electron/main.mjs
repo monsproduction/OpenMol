@@ -3,7 +3,8 @@
 // gebauten Ordner dist/ geladen (in der Entwicklung vom Vite-Server). Alles, was der Browser nicht kann
 // (Datei-Dialoge, Menüleiste, Einstellungen als Datei), läuft hier und ist der Oberfläche nur über die schmale
 // Brücke in preload.cjs zugänglich.
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell } from 'electron'
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, net, protocol, shell } from 'electron'
+import zlib from 'node:zlib'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -273,6 +274,37 @@ function registerIpc() {
     }
   })
 
+  // ---------- Versuch „Word-Austausch“: Bild mit OpenMol-Daten (OM1:…) auf die Zwischenablage, zurück lesen ----------
+  // PNG roh schreiben (Systemformat public.png bzw. „PNG“): als image/png würde Chromium es neu codieren und den
+  // Datenblock verwerfen
+  ipcMain.handle('openmol:clip-write', async (_e, kind, data) => {
+    if (kind === 'png' && data instanceof Uint8Array) {
+      const raw = `electron application/osclipboard;format="${process.platform === 'darwin' ? 'public.png' : 'PNG'}"`
+      await clipboard.write([new ClipboardItem({ [raw]: new Blob([Buffer.from(data)]) })])
+      return true
+    }
+    if (kind === 'html' && typeof data === 'string' && data.length < 50e6) {
+      await clipboard.write([new ClipboardItem({ 'text/html': data, 'text/plain': 'OpenMol-Struktur' })])
+      return true
+    }
+    return false
+  })
+  ipcMain.handle('openmol:clip-scan', async () => (await scanClipboard()).payload)
+  ipcMain.handle('openmol:clip-report', async () => {
+    const r = await scanClipboard()
+    const lines = r.formats.map((f) => `${f.found ? '✔' : '–'} ${f.name} (${f.size.toLocaleString('de-DE')} Byte)${f.found ? ' – ' + f.found : ''}`)
+    const text = [`OpenMol-Daten gefunden: ${r.payload ? 'JA' : 'nein'}`, '', ...lines].join('\n')
+    try {
+      // anhängen: so bleiben alle Prüfläufe eines Tests nachvollziehbar
+      fs.appendFileSync(path.join(app.getPath('userData'), 'zwischenablage-bericht.txt'), '\n=== ' + new Date().toLocaleString('de-DE') + '\n' + text + '\n')
+    } catch {
+      // nur Komfort
+    }
+    if (testDialogs) console.log('[clip-report]\n' + text)
+    else await dialog.showMessageBox(win, { type: 'info', message: r.payload ? 'Die OpenMol-Daten sind in der Zwischenablage.' : 'Keine OpenMol-Daten in der Zwischenablage.', detail: text, buttons: ['OK'] })
+    return text
+  })
+
   ipcMain.handle('openmol:write-file', async (_e, p, data) => {
     if (!allowed.has(path.resolve(p))) throw new Error('Datei nicht freigegeben')
     // sicher schreiben: erst daneben, dann umbenennen (kein halbes Dokument bei Absturz)
@@ -359,6 +391,60 @@ function registerIpc() {
     })
     return r.response
   })
+}
+
+const OM_RE = /OM1:[A-Za-z0-9_-]{16,}/
+
+/** in einem Puffer nach „OM1:…“ suchen: direkt, in data-URIs (base64) und in RTF-Bildern (hex) */
+function findPayload(buf) {
+  const latin = buf.toString('latin1')
+  let m = OM_RE.exec(latin)
+  if (m) return { payload: m[0], how: 'direkt' }
+  for (const d of latin.matchAll(/data:image\/png;base64,([A-Za-z0-9+/=]+)/g)) {
+    m = OM_RE.exec(Buffer.from(d[1], 'base64').toString('latin1'))
+    if (m) return { payload: m[0], how: 'im eingebetteten Bild (data-URI)' }
+  }
+  const hex = latin.search(/4f4d313a/i)
+  if (hex >= 0) {
+    const run = /^[0-9a-f\s]+/i.exec(latin.slice(hex))?.[0].replace(/\s/g, '') ?? ''
+    m = OM_RE.exec(Buffer.from(run.slice(0, run.length - (run.length % 2)), 'hex').toString('latin1'))
+    if (m) return { payload: m[0], how: 'im RTF-Bild (hex)' }
+  }
+  return null
+}
+
+/** prüfen, ob die Nutzlast eine gültige OpenMol-Zeichnung ist (deflate + JSON) */
+function validPayload(p) {
+  try {
+    const j = JSON.parse(zlib.inflateSync(Buffer.from(p.slice(4), 'base64url')).toString('utf8'))
+    return j?.format === 'openmol-clip' && Array.isArray(j.clip?.atoms)
+  } catch {
+    return false
+  }
+}
+
+/** alle Formate der Zwischenablage lesen (auch die eigenen von Word/PowerPoint) und nach OpenMol-Daten durchsuchen */
+async function scanClipboard() {
+  const formats = []
+  let payload = null
+  for (const item of await clipboard.read()) {
+    for (const type of item.types) {
+      let buf
+      try {
+        buf = Buffer.from(await (await item.getType(type)).arrayBuffer())
+      } catch {
+        continue
+      }
+      if (!buf.length) continue
+      const f = findPayload(buf)
+      const ok = f && validPayload(f.payload)
+      // „electron application/osclipboard;format="…"“ = Rohformat des Systems – im Bericht nur dessen Namen zeigen
+      const name = /format="([^"]+)"/.exec(type)?.[1] ?? type
+      formats.push({ name, size: buf.length, found: f ? f.how + (ok ? '' : ' (beschädigt)') : '' })
+      if (ok && !payload) payload = f.payload
+    }
+  }
+  return { formats, payload }
 }
 
 async function readDoc(p) {
