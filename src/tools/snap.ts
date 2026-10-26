@@ -5,6 +5,46 @@ import { selectionAtomIds } from '../model/ops'
 import { arrowPoints, sceneBBox, textBox, type Scene } from '../model/scene'
 import type { Selection } from '../model/types'
 import { cycleBox } from '../model/cycle'
+import { pageRects, PT_PER_UNIT } from '../model/pages'
+import type { Doc } from '../model/types'
+
+/** Dokument-Einheiten je mm des gedruckten Blatts */
+export const UNITS_PER_MM = 72 / 25.4 / PT_PER_UNIT
+
+/** Nullpunkt von Linealen und Raster: linke obere Ecke der Seiten, ohne Seitenlayout der Ursprung */
+export function layoutOrigin(doc: Doc): { x: number; y: number } {
+  const p = doc.style.page
+  return p ? { x: p.x, y: p.y } : { x: 0, y: 0 }
+}
+
+/** Hilfslinien (Mitte bevorzugt) und – falls eingeschaltet – Seitenränder, Satzspiegel und Seitenmitte */
+function addLayoutRefs(refs: SnapRefs, doc: Doc) {
+  const aids = doc.style.aids
+  // unendlich lange Linien: die angezeigte Hilfslinie reicht dann genau über das bewegte Objekt
+  for (const x of aids?.guidesX ?? []) refs.v.push({ x, y1: Infinity, y2: -Infinity, center: true })
+  for (const y of aids?.guidesY ?? []) refs.h.push({ y, x1: Infinity, x2: -Infinity, center: true })
+  const page = doc.style.page
+  if (!aids?.snapPage || !page) return
+  const m = (aids.margin ?? 0) * UNITS_PER_MM
+  for (const r of pageRects(page)) {
+    const b = { x1: r.x, y1: r.y, x2: r.x + r.w, y2: r.y + r.h }
+    addBox(refs, b)
+    if (m > 0 && m * 2 < Math.min(r.w, r.h)) addBox(refs, { x1: b.x1 + m, y1: b.y1 + m, x2: b.x2 - m, y2: b.y2 - m })
+  }
+}
+
+/** Verschiebung am Raster einrasten (Mitte des bewegten Objekts), nur auf Achsen ohne andere Hilfslinie */
+export function gridSnapMove(doc: Doc, box: Box, dx: number, dy: number, guides: Guide[]): { dx: number; dy: number } {
+  const g = (doc.style.aids?.grid ?? 0) * UNITS_PER_MM
+  if (!(g > 0)) return { dx, dy }
+  const o = layoutOrigin(doc)
+  const cx = (box.x1 + box.x2) / 2 + dx
+  const cy = (box.y1 + box.y2) / 2 + dy
+  return {
+    dx: guides.some((gd) => gd.kind === 'v') ? dx : dx + o.x + Math.round((cx - o.x) / g) * g - cx,
+    dy: guides.some((gd) => gd.kind === 'h') ? dy : dy + o.y + Math.round((cy - o.y) / g) * g - cy,
+  }
+}
 
 export interface HRef {
   y: number
@@ -84,6 +124,7 @@ export function collectRefs(scene: Scene, sel: Selection): SnapRefs {
     const s = doc.shapes[id]
     addBox(refs, { x1: Math.min(s.x1, s.x2), y1: Math.min(s.y1, s.y2), x2: Math.max(s.x1, s.x2), y2: Math.max(s.y1, s.y2) })
   }
+  addLayoutRefs(refs, doc)
   return refs
 }
 

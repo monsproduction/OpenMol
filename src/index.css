@@ -16,6 +16,7 @@
   --grid-dot: #dfe3ea;
   --page-backdrop: #dde1e8;
   --page-edge: #9aa3b2;
+  --grid-line: #e4e7ee;
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.08);
   --shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.16), 0 2px 6px rgba(16, 24, 40, 0.08);
   --radius: 10px;
@@ -40,6 +41,7 @@
   --grid-dot: #e1e4ea;
   --page-backdrop: #2a2e36;
   --page-edge: #8b93a1;
+  --grid-line: #e2e5ec;
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
   color-scheme: dark;
@@ -2575,4 +2577,39 @@ code {
   color: var(--text-3);
   text-decoration: none;
   cursor: default;
+}
+
+/* Lineale (Seitenlayout-Hilfen, Dokument-Stil) */
+.rulers .ruler-bg {
+  fill: var(--panel-2);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+.rulers .ruler-corner {
+  fill: var(--panel-2);
+}
+.rulers .ruler-ticks {
+  stroke: var(--text-3);
+  stroke-width: 1;
+  fill: var(--text-2);
+  font-family: var(--ui-font);
+}
+
+.aids {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.aids .aids-title {
+  margin-bottom: 2px;
+}
+.aids .btn {
+  align-self: flex-start;
+}
+
+.check.disabled {
+  opacity: 0.5;
 }

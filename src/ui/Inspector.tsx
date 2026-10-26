@@ -3,7 +3,7 @@ import { linearizeTriples, selectionAtomIds } from '../model/ops'
 import { analyze, smilesToName, stereoCenters } from '../model/ocl'
 import { isotopePattern } from '../model/isotopePattern'
 import { hasLocked, inGroup } from '../model/groups'
-import type { ArrowKind, ArrowRoute, BondType, Cycle, DocStyle, DoublePos, Shape, ShapeKind } from '../model/types'
+import type { ArrowKind, ArrowRoute, BondType, Cycle, DocStyle, DoublePos, LayoutAids, Shape, ShapeKind } from '../model/types'
 import { CLOSED_SHAPES, FONTS, STYLE_PRESETS, emptySelection, selectionSize } from '../model/types'
 import type { FillStyle } from '../model/rings'
 import { arrowTextOpts, getScene, textBox } from '../model/scene'
@@ -1190,6 +1190,7 @@ function DocSettings({ style, setStyle }: { style: DocStyle; setStyle: (p: Parti
       <label className="check">
         <input type="checkbox" checked={!!style.showCip} onChange={(e) => setStyle({ showCip: e.target.checked || undefined })} /> R/S an allen Stereozentren anzeigen
       </label>
+      <LayoutAidsControls />
     </Section>
   )
 }
@@ -1868,6 +1869,54 @@ function IsoBars({ natural, labeled }: { natural: Record<string, number>; labele
           <span className="iso-p">{p.nominal === base ? '100' : fmtDec(p.rel, p.rel >= 10 ? 1 : 2)} %</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+/** Lineale, Raster, Hilfslinien, Ausrichten am Blatt (Dokument-Stil; nur Bildschirm, nie im Export) */
+function LayoutAidsControls() {
+  const aids = useStore((s) => s.doc.style.aids) ?? {}
+  const hasPage = useStore((s) => !!s.doc.style.page)
+  const set = (p: Partial<LayoutAids>) =>
+    commit((d) => {
+      const a: LayoutAids = { ...(d.style.aids ?? {}), ...p }
+      for (const k of Object.keys(a) as (keyof LayoutAids)[]) if (a[k] === undefined || a[k] === false) delete a[k]
+      if (Object.keys(a).length) d.style.aids = a
+      else delete d.style.aids
+    })
+  const nGuides = (aids.guidesX?.length ?? 0) + (aids.guidesY?.length ?? 0)
+  return (
+    <div className="aids">
+      <div className="muted small aids-title">Lineale, Raster &amp; Hilfslinien</div>
+      <label className="check" data-tip="Lineale in cm am Rand der Zeichenfläche (Nullpunkt: linke obere Seitenecke). Aus dem Lineal Hilfslinien herausziehen, zurück aufs Lineal ziehen = löschen">
+        <input type="checkbox" checked={!!aids.rulers} onChange={(e) => set({ rulers: e.target.checked })} /> Lineale (Hilfslinien herausziehen)
+      </label>
+      <label className="check" data-tip="Raster über dem Blatt anzeigen (nicht im Export)">
+        <input type="checkbox" checked={!!aids.grid} onChange={(e) => set({ grid: e.target.checked ? 5 : undefined, gridSnap: e.target.checked ? aids.gridSnap : undefined })} /> Raster
+      </label>
+      {!!aids.grid && (
+        <>
+          <Row label="Rasterweite">
+            <NumSlider min={1} max={20} step={0.5} inputMin={0.5} inputMax={100} digits={1} unit="mm" value={aids.grid} def={5} onChange={(v) => set({ grid: v })} />
+          </Row>
+          <label className="check" data-tip="Beim Verschieben springt die Mitte des Objekts auf den nächsten Rasterpunkt (⌘/Strg gedrückt = frei)">
+            <input type="checkbox" checked={!!aids.gridSnap} onChange={(e) => set({ gridSnap: e.target.checked })} /> Am Raster einrasten
+          </label>
+        </>
+      )}
+      <label className={'check' + (hasPage ? '' : ' disabled')} data-tip={hasPage ? 'Beim Verschieben an Blatträndern, Satzspiegel und Blattmitte einrasten (wie an anderen Objekten)' : 'Nur mit Seitenformat (oben „Seitenformat“ wählen)'}>
+        <input type="checkbox" disabled={!hasPage} checked={!!aids.snapPage && hasPage} onChange={(e) => set({ snapPage: e.target.checked })} /> An Rändern und Seitenmitte ausrichten
+      </label>
+      {hasPage && !!aids.snapPage && (
+        <Row label="Satzspiegel">
+          <NumSlider min={0} max={40} step={1} inputMin={0} inputMax={200} digits={0} unit="mm" value={aids.margin ?? 0} def={0} onChange={(v) => set({ margin: v || undefined })} />
+        </Row>
+      )}
+      {nGuides > 0 && (
+        <button className="btn small" onClick={() => set({ guidesX: undefined, guidesY: undefined })} data-tip="Alle Hilfslinien entfernen">
+          Hilfslinien löschen ({nGuides})
+        </button>
+      )}
     </div>
   )
 }

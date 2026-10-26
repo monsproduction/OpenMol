@@ -83,7 +83,7 @@ import {
 import { trackPointer } from '../tools/keyboard'
 import { arcLabelPos, attachCycle, branchFromPoint, branchGeom, branchLabelPos, cubicDist, eAngle, eDist, eNormal, ePoint, linkGeom, linkLabelPos, newArcLabel, newBranch, newBranchPair, newCycle, stationHalfGaps, stationLabelSize } from '../model/cycle'
 import { center3, rotate3, type V3 } from '../model/three'
-import { collectRefs, snapMove, snapPoint, type Guide, type SnapRefs } from '../tools/snap'
+import { collectRefs, gridSnapMove, layoutOrigin, snapMove, snapPoint, UNITS_PER_MM, type Guide, type SnapRefs } from '../tools/snap'
 import type { Box } from '../model/geom'
 import { RichToolbar, richKeyDown } from '../ui/RichEditor'
 import { layoutRich, parseRich, richPlain, richToEditorHtml, sanitizeRich } from '../model/richtext'
@@ -92,6 +92,21 @@ import { DocContent, headPath } from './DocSvg'
 
 const ACCENT = '#2f6bff'
 const GUIDE = '#ff2d87'
+/** Hilfslinien des Seitenlayouts (aus dem Lineal gezogen) */
+const LAYOUT_GUIDE = '#00a2d6'
+/** Breite der Lineale in Pixeln */
+const RULER = 18
+
+/** Hilfslinie setzen: neue anhängen bzw. vorhandene verschieben (für liveUpdate – läuft immer auf dem Ausgangsstand) */
+function putGuide(d: Doc, axis: 'x' | 'y', index: number, isNew: boolean, v: number | null) {
+  const a = (d.style.aids ??= {})
+  const arr = axis === 'x' ? (a.guidesX ??= []) : (a.guidesY ??= [])
+  if (v === null) {
+    if (!isNew) arr.splice(index, 1)
+  } else if (isNew) arr.push(v)
+  else arr[index] = v
+  if (!arr.length) delete a[axis === 'x' ? 'guidesX' : 'guidesY']
+}
 
 interface MoveSnap {
   box: Box
@@ -124,6 +139,8 @@ type Drag =
   | { mode: 'pan'; sx: number; sy: number; px: number; py: number }
   | { mode: 'move'; start: Pt; moved: boolean; sel: Selection; dup: ClipData | null; dupSel?: Selection; snap: MoveSnap | null; last: Pt; narrow?: Selection }
   | { mode: 'rect'; start: Pt; additive: boolean }
+  /** Hilfslinie ziehen (aus dem Lineal neu bzw. eine vorhandene); zurück aufs Lineal = löschen */
+  | { mode: 'guide'; axis: 'x' | 'y'; index: number; isNew: boolean }
   | { mode: 'lasso'; pts: Pt[]; additive: boolean }
   | { mode: 'rotate'; center: Pt; start: Pt; sel: Selection; bases: number[] }
   | { mode: 'bond'; start: Pt; down: Pt; from: Id | null; onBond: Id | null; fromText: Id | null }
@@ -426,6 +443,16 @@ export function Canvas() {
     return h
   }
 
+  /** vorhandene Hilfslinie unter dem Mauszeiger (5 px Toleranz) */
+  const guideNear = (p: Pt): { axis: 'x' | 'y'; index: number } | null => {
+    const a = getState().doc.style.aids
+    const zz = getState().view.zoom
+    const ix = (a?.guidesX ?? []).findIndex((x) => Math.abs(x - p.x) * zz < 5)
+    if (ix >= 0) return { axis: 'x', index: ix }
+    const iy = (a?.guidesY ?? []).findIndex((y) => Math.abs(y - p.y) * zz < 5)
+    return iy >= 0 ? { axis: 'y', index: iy } : null
+  }
+
   // ---------- Griffe für ausgewählte Objekte ----------
   const selBox = useMemo(() => {
     if (!selectionSize(sel)) return null
@@ -522,6 +549,20 @@ export function Canvas() {
     }
     const p = toDoc(e)
     const t = st.tool
+    // Lineal: Hilfslinie herausziehen (oben → waagerecht, links → senkrecht)
+    {
+      const rect = svgRef.current!.getBoundingClientRect()
+      const sx = e.clientX - rect.left
+      const sy = e.clientY - rect.top
+      if (st.doc.style.aids?.rulers && (sx < RULER) !== (sy < RULER)) {
+        const axis = sy < RULER ? 'y' : 'x'
+        const index = (axis === 'x' ? st.doc.style.aids.guidesX : st.doc.style.aids.guidesY)?.length ?? 0
+        beginTx()
+        liveUpdate((d) => putGuide(d, axis, index, true, axis === 'x' ? p.x : p.y))
+        drag.current = { mode: 'guide', axis, index, isNew: true }
+        return
+      }
+    }
 
     if (t === 'select' || t === 'lasso') {
       // Griffe zuerst
@@ -603,6 +644,10 @@ export function Canvas() {
         // Klick (ohne Ziehen) auf ein Atom/eine Bindung einer größeren Auswahl: danach nur dieses markieren
         const one = picked
         if (!e.shiftKey && (h.kind === 'atom' || h.kind === 'bond') && selectionSize(ns) > selectionSize(one) && drag.current.mode === 'move') drag.current.narrow = one
+      } else if (guideNear(p)) {
+        const g = guideNear(p)!
+        beginTx()
+        drag.current = { mode: 'guide', axis: g.axis, index: g.index, isNew: false }
       } else if (selBox && selectionSize(st.sel) > 1 && !e.shiftKey && p.x >= selBox.x1 && p.x <= selBox.x2 && p.y >= selBox.y1 && p.y <= selBox.y2) {
         // Ziehen innerhalb des Auswahlrahmens verschiebt die Auswahl
         beginTx()
@@ -717,21 +762,47 @@ export function Canvas() {
       }
       if (JSON.stringify(h) !== JSON.stringify(st.hover)) setState({ hover: h })
       if (st.tool === 'ring' || st.tool === 'template' || st.tool === 'ringfill') setCursor(p)
+      // Mauszeiger über Hilfslinien bzw. Linealen: zeigt, dass man ziehen kann
+      if (svgRef.current) {
+        const rect = svgRef.current.getBoundingClientRect()
+        const sx = e.clientX - rect.left
+        const sy = e.clientY - rect.top
+        const onRuler = !!st.doc.style.aids?.rulers && (sx < RULER) !== (sy < RULER)
+        const g = !h && (st.tool === 'select' || st.tool === 'lasso') ? guideNear(p) : null
+        const c = onRuler ? (sy < RULER ? 'row-resize' : 'col-resize') : g ? (g.axis === 'x' ? 'col-resize' : 'row-resize') : ''
+        if (svgRef.current.style.cursor !== c) svgRef.current.style.cursor = c
+      }
       return
     }
     switch (d.mode) {
+      case 'guide': {
+        // am Raster einrasten, falls eingeschaltet
+        const aids = st.doc.style.aids
+        let v = d.axis === 'x' ? p.x : p.y
+        const g = (aids?.grid ?? 0) * UNITS_PER_MM
+        if (aids?.gridSnap && g > 0 && !(e.metaKey || e.ctrlKey)) {
+          const o = layoutOrigin(st.doc)[d.axis]
+          v = o + Math.round((v - o) / g) * g
+        }
+        liveUpdate((doc) => putGuide(doc, d.axis, d.index, d.isNew, v))
+        return
+      }
       case 'move': {
         let dx = p.x - d.start.x
         let dy = p.y - d.start.y
         if (!d.moved && Math.hypot(dx, dy) * z < 3) return
         d.moved = true
         // Magnetische Hilfslinien (⌘/Strg gedrückt halten = aus)
+        let shown: Guide[] = []
         if (d.snap && st.opts.snap && !(e.metaKey || e.ctrlKey)) {
           const r = snapMove(d.snap.box, dx, dy, d.snap.refs, 7 / z, d.snap.keys, d.snap.keysOnly)
           dx = r.dx
           dy = r.dy
-          setGuides(r.guides)
-        } else setGuides([])
+          shown = r.guides
+        }
+        // Raster (Dokument-Stil): wo keine andere Hilfslinie greift
+        if (d.snap && st.doc.style.aids?.gridSnap && !(e.metaKey || e.ctrlKey)) ({ dx, dy } = gridSnapMove(st.doc, d.snap.box, dx, dy, shown))
+        setGuides(shown)
         d.last = { x: dx, y: dy }
         if (d.dup) {
           const clip = d.dup
@@ -1075,6 +1146,19 @@ export function Canvas() {
     switch (d.mode) {
       case 'pan':
         return
+      case 'guide': {
+        // zurück aufs Lineal bzw. aus der Zeichenfläche gezogen = löschen
+        const rect = svgRef.current!.getBoundingClientRect()
+        const sx = e.clientX - rect.left
+        const sy = e.clientY - rect.top
+        const out = sx < 0 || sy < 0 || sx > rect.width || sy > rect.height || (d.axis === 'x' ? sx < RULER : sy < RULER)
+        if (out && d.isNew) cancelTx()
+        else {
+          if (out) liveUpdate((doc) => putGuide(doc, d.axis, d.index, false, null))
+          endTx()
+        }
+        return
+      }
       case 'move': {
         if (!d.moved) {
           endTx()
@@ -1866,6 +1950,11 @@ export function Canvas() {
 
   const cursorClass = `tool-${tool}`
   const gridSize = L * z
+  // Raster aus dem Dokument-Stil (mm): bei kleinem Zoom nur jede 2./5./10. Linie zeigen
+  const aids = doc.style.aids
+  const origin = layoutOrigin(doc)
+  const gridU = aids?.grid ? aids.grid * UNITS_PER_MM : 0
+  const gridStep = gridU ? gridU * ([1, 2, 5, 10, 20, 50, 100].find((f) => gridU * f * z >= 6) ?? 100) : 0
 
   return (
     <div ref={wrapRef} className={`canvas-wrap ${cursorClass}`} onContextMenu={onContextMenu}>
@@ -1890,19 +1979,105 @@ export function Canvas() {
         ) : (
           <>
             {doc.style.background && <rect width="100%" height="100%" fill={doc.style.background} />}
-            <rect width="100%" height="100%" fill="url(#grid)" />
+            {!gridStep && <rect width="100%" height="100%" fill="url(#grid)" />}
           </>
         )}
         <g transform={`translate(${view.panX},${view.panY}) scale(${z})`}>
           {page && <PageSheet page={page} background={doc.style.background} zoom={z} />}
+          {gridStep > 0 && (
+            // Raster (Dokument-Stil): über dem Blatt, unter der Zeichnung; nur auf dem Bildschirm
+            <>
+              <defs>
+                <pattern id="lgrid" width={gridStep} height={gridStep} patternUnits="userSpaceOnUse" x={origin.x} y={origin.y}>
+                  <path d={`M ${gridStep} 0 L 0 0 0 ${gridStep}`} fill="none" stroke="var(--grid-line)" strokeWidth={1 / z} />
+                </pattern>
+              </defs>
+              {(() => {
+                // mit Seitenlayout nur auf dem Blatt, sonst über die sichtbare Fläche
+                const b = page ? sheetBox(page) : { x1: -view.panX / z, y1: -view.panY / z, x2: (size.w - view.panX) / z, y2: (size.h - view.panY) / z }
+                return <rect x={b.x1} y={b.y1} width={b.x2 - b.x1} height={b.y2 - b.y1} fill="url(#lgrid)" pointerEvents="none" />
+              })()}
+            </>
+          )}
           <g className="overlay-below">{below}</g>
           <Content scene={scene} />
           <g className="overlay-above">{overlay}</g>
         </g>
+        {/* Hilfslinien des Seitenlayouts (über die ganze Fläche) */}
+        <g pointerEvents="none" stroke={LAYOUT_GUIDE} strokeWidth={1}>
+          {(aids?.guidesX ?? []).map((x, i) => (
+            <line key={'gx' + i} x1={view.panX + x * z} y1={0} x2={view.panX + x * z} y2={size.h} />
+          ))}
+          {(aids?.guidesY ?? []).map((y, i) => (
+            <line key={'gy' + i} x1={0} y1={view.panY + y * z} x2={size.w} y2={view.panY + y * z} />
+          ))}
+        </g>
         {page && !editing && <PagePlusButtons page={page} view={view} />}
+        {aids?.rulers && <Rulers view={view} w={size.w} h={size.h} origin={origin} />}
       </svg>
       {editing && <InlineEditor key={editing.id + (editing.which ?? '') + (editing.part ?? '')} />}
     </div>
+  )
+}
+
+/**
+ * Lineale oben und links in cm (Nullpunkt: linke obere Ecke der Seiten). Aus ihnen zieht man Hilfslinien heraus
+ * (siehe onPointerDown); Teilstriche je nach Zoom alle 1/2/5 mm …
+ */
+function Rulers({ view, w, h, origin }: { view: { zoom: number; panX: number; panY: number }; w: number; h: number; origin: { x: number; y: number } }) {
+  const pxPerMm = UNITS_PER_MM * view.zoom
+  const minor = [1, 2, 5, 10, 20, 50, 100, 200, 500].find((s) => s * pxPerMm >= 5) ?? 500
+  const major = [10, 20, 50, 100, 200, 500, 1000, 2000].find((s) => s * pxPerMm >= 48 && s % minor === 0) ?? 2000
+  const ticks = (axis: 'x' | 'y', len: number) => {
+    const pan = axis === 'x' ? view.panX : view.panY
+    const o = axis === 'x' ? origin.x : origin.y
+    // sichtbarer Bereich in mm ab Nullpunkt
+    const mm = (s: number) => ((s - pan) / view.zoom - o) / UNITS_PER_MM
+    const from = Math.floor(mm(RULER) / minor) * minor
+    const to = mm(len)
+    const out = []
+    for (let m = from; m <= to; m += minor) {
+      const s = pan + (o + m * UNITS_PER_MM) * view.zoom
+      if (s < RULER) continue
+      const isMajor = Math.abs(m % major) < 1e-6
+      const half = !isMajor && Math.abs(m % (major / 2)) < 1e-6
+      const t = isMajor ? RULER * 0.55 : half ? RULER * 0.35 : RULER * 0.2
+      out.push(
+        axis === 'x' ? (
+          <line key={m} x1={s} y1={RULER - t} x2={s} y2={RULER} />
+        ) : (
+          <line key={m} x1={RULER - t} y1={s} x2={RULER} y2={s} />
+        ),
+      )
+      if (isMajor) {
+        const label = String(Math.round(m) / 10)
+        out.push(
+          axis === 'x' ? (
+            <text key={'t' + m} x={s + 2} y={9} fontSize={9} stroke="none">
+              {label}
+            </text>
+          ) : (
+            <text key={'t' + m} x={9} y={s + 2} fontSize={9} stroke="none" transform={`rotate(-90 9 ${s + 2})`} textAnchor="end">
+              {label}
+            </text>
+          ),
+        )
+      }
+    }
+    return out
+  }
+  return (
+    <g className="rulers">
+      <rect x={0} y={0} width={w} height={RULER} className="ruler-bg" />
+      <rect x={0} y={0} width={RULER} height={h} className="ruler-bg" />
+      <g className="ruler-ticks">
+        {ticks('x', w)}
+        {ticks('y', h)}
+      </g>
+      <rect x={0} y={0} width={RULER} height={RULER} className="ruler-corner">
+        <title>Lineale in cm – Hilfslinie herausziehen, zurück aufs Lineal ziehen zum Löschen</title>
+      </rect>
+    </g>
   )
 }
 

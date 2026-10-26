@@ -329,6 +329,24 @@ export interface DocStyle {
   background?: string
   /** Seitenlayout (A4, PowerPoint …); fehlt es, ist die Zeichenfläche unbegrenzt */
   page?: PageLayout
+  /** Lineale, Raster, Hilfslinien (nur auf dem Bildschirm, nie im Export) */
+  aids?: LayoutAids
+}
+
+/** Hilfen fürs Seitenlayout; Maße in mm des gedruckten Blatts (1 mm = 72/25,4 pt), Lagen in Dokument-Einheiten */
+export interface LayoutAids {
+  rulers?: boolean
+  /** Rasterweite in mm; fehlt sie, kein Raster */
+  grid?: number
+  /** beim Verschieben am Raster einrasten */
+  gridSnap?: boolean
+  /** an Seitenrändern, Satzspiegel und Seitenmitte ausrichten */
+  snapPage?: boolean
+  /** Satzspiegel: Abstand vom Blattrand in mm (Hilfslinien zum Ausrichten) */
+  margin?: number
+  /** Hilfslinien: senkrechte (x) und waagerechte (y) */
+  guidesX?: number[]
+  guidesY?: number[]
 }
 
 /** Raster gleich großer Seiten: linke obere Ecke x/y (Dokument-Einheiten), Spalten × Zeilen (siehe model/pages.ts) */
@@ -598,6 +616,24 @@ export function normalizeDoc(raw: Partial<Doc>): Doc {
     const c = safeColor(st.background)
     if (c) st.background = c
     else delete st.background
+  }
+  if (st.aids !== undefined) {
+    const a = st.aids as Record<string, unknown> | null
+    const nums = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is number => ok(x)).slice(0, 200) : undefined)
+    const out: LayoutAids = {}
+    if (a && typeof a === 'object') {
+      if (a.rulers === true) out.rulers = true
+      if (ok(a.grid) && (a.grid as number) >= 0.5 && (a.grid as number) <= 100) out.grid = a.grid as number
+      if (a.gridSnap === true) out.gridSnap = true
+      if (a.snapPage === true) out.snapPage = true
+      if (ok(a.margin) && (a.margin as number) >= 0 && (a.margin as number) <= 200) out.margin = a.margin as number
+      const gx = nums(a.guidesX)
+      const gy = nums(a.guidesY)
+      if (gx?.length) out.guidesX = gx
+      if (gy?.length) out.guidesY = gy
+    }
+    if (Object.keys(out).length) st.aids = out
+    else delete st.aids
   }
   const pg = st.page
   if (pg && (typeof pg !== 'object' || !ok(pg.x) || !ok(pg.y) || !(pg.cols >= 1) || !(pg.rows >= 1))) delete st.page
