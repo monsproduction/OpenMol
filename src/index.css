@@ -635,7 +635,15 @@ textarea {
 }
 
 /* Ebenen-Leiste bleibt immer oben */
-.inspector > .arrange-bar {
+.inspector > .arrange-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--border, currentColor);
+  opacity: 0.4;
+}
+
+.arrange-bar {
   order: -1;
 }
 

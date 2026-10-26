@@ -5,6 +5,10 @@ import { parseRich, serializeRich, type Run } from '../model/richtext'
 import { clipboard, commit, getState, redo, setState, setTool, toast, toggleInspector, undo, type Hotspot } from '../store'
 import {
   arrange,
+  groupSelection,
+  lockSelection,
+  ungroupSelection,
+  unlockEverything,
   toggleBold,
   cleanStructure,
   copySelection,
@@ -122,6 +126,13 @@ export function handleKeyDown(e: KeyboardEvent) {
       if (e.code === 'KeyK') cleanStructure()
       else if (e.code === 'KeyX') cleanReaction()
       else toggle3D()
+      return
+    }
+    // ⌘G gruppieren / ⇧⌘G auflösen · ⌘L sperren / ⇧⌘L alle entsperren (über e.code, Shift ändert die Taste)
+    if (!e.altKey && (e.code === 'KeyG' || e.code === 'KeyL')) {
+      e.preventDefault()
+      if (e.code === 'KeyG') (e.shiftKey ? ungroupSelection : groupSelection)()
+      else (e.shiftKey ? unlockEverything : lockSelection)()
       return
     }
     if (lk === 'z') {

@@ -1,5 +1,6 @@
 // Kontextmenü (Rechtsklick auf die Zeichenfläche): die wichtigsten Befehle für die Auswahl bzw. – auf leerer Fläche –
 // für das Dokument. Untermenüs öffnen sich beim Überfahren. Schließt bei Klick daneben, Escape oder Scrollen.
+import { hasLocked, inGroup } from '../model/groups'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { selectionSize } from '../model/types'
 import { ABBREVIATIONS, canonicalAbbrev } from '../model/abbrev'
@@ -15,7 +16,11 @@ import {
   duplicateSelection,
   expandGroups,
   fitView,
+  groupSelection,
   HIGHLIGHT_COLORS,
+  lockSelection,
+  ungroupSelection,
+  unlockEverything,
   insertAnalysis,
   setHighlight,
   flip,
@@ -77,6 +82,7 @@ function entries(at: { x: number; y: number }, pick: boolean): Entry[] {
     return [
       { label: 'Einfügen', shortcut: K('⌘V'), action: () => void pasteInternal(at), disabled: !clipboard.data, tip: 'Kopiertes hier einfügen' },
       { label: 'Alles auswählen', shortcut: K('⌘A'), action: selectAll },
+      ...(hasLocked(doc) ? [{ label: 'Alle entsperren', shortcut: K('⇧⌘L'), action: unlockEverything, tip: 'Gesperrte Objekte wieder anklickbar und verschiebbar machen' } as MenuItem] : []),
       'sep',
       {
         label: 'Name → Struktur …',
@@ -94,6 +100,12 @@ function entries(at: { x: number; y: number }, pick: boolean): Entry[] {
     { label: 'Kopieren', shortcut: K('⌘C'), action: () => copySelection(false) },
     { label: 'Duplizieren', shortcut: K('⌘D'), action: duplicateSelection },
     { label: 'Löschen', shortcut: '⌫', action: deleteSelection },
+    'sep',
+    inGroup(doc, sel)
+      ? { label: 'Gruppierung aufheben', shortcut: K('⇧⌘G'), action: ungroupSelection }
+      : { label: 'Gruppieren', shortcut: K('⌘G'), action: groupSelection, tip: 'Als eine Einheit auswählen und verschieben (z. B. Molekül mit Beschriftung, Pfeil und Bedingungen)' },
+    { label: 'Sperren', shortcut: K('⌘L'), action: lockSelection, tip: 'Nicht mehr anklickbar oder verschiebbar, bis „Alle entsperren“ (⇧⌘L)' },
+    ...(hasLocked(doc) ? [{ label: 'Alle entsperren', shortcut: K('⇧⌘L'), action: unlockEverything } as MenuItem] : []),
     'sep',
     {
       label: 'Ebene',

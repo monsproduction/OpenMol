@@ -1,4 +1,5 @@
 // Befehle, die von Menüs, Tastenkürzeln und der Zeichenfläche gemeinsam genutzt werden.
+import { countObjects, hasLocked, inGroup, lockItems, makeGroup, removeGroups, unlockAll, withoutLocked } from '../model/groups'
 import { linkTable } from '../model/reactionLink'
 import { isotopePattern } from '../model/isotopePattern'
 import { buildGraph, fragments } from '../model/chem'
@@ -39,7 +40,8 @@ import { copyImageToClipboard } from './io'
 export function selectAll() {
   const d = getState().doc
   setState({
-    sel: {
+    // gesperrte Objekte bleiben außen vor
+    sel: withoutLocked(d, {
       atoms: Object.keys(d.atoms),
       bonds: Object.keys(d.bonds),
       arrows: Object.keys(d.arrows),
@@ -49,8 +51,42 @@ export function selectAll() {
       fills: Object.keys(d.fills),
       cycles: Object.keys(d.cycles ?? {}),
       tables: Object.keys(d.tables ?? {}),
-    },
+    }),
   })
+}
+
+// ---------- Gruppieren und Sperren ----------
+
+/** ⌘G: Auswahl gruppieren (mindestens zwei Objekte; ein Molekül zählt als eines) */
+export function groupSelection() {
+  const { doc, sel } = getState()
+  const s = completeSel(doc, sel)
+  if (countObjects(doc, s) < 2) return toast('Zum Gruppieren mindestens zwei Objekte auswählen (z. B. Molekül und Text)')
+  commit((d) => makeGroup(d, s, uid('g')))
+  toast('Gruppiert – wird jetzt als Ganzes ausgewählt (⇧⌘G löst die Gruppe)')
+}
+
+/** ⇧⌘G: Gruppen der Auswahl auflösen */
+export function ungroupSelection() {
+  const { doc, sel } = getState()
+  if (!inGroup(doc, sel)) return toast('Die Auswahl gehört zu keiner Gruppe')
+  commit((d) => void removeGroups(d, sel))
+}
+
+/** ⌘L: Auswahl sperren – danach nicht mehr anklickbar oder verschiebbar */
+export function lockSelection() {
+  const { doc, sel } = getState()
+  if (!selectionSize(sel)) return toast('Erst Objekte auswählen')
+  const s = completeSel(doc, sel)
+  commit((d) => lockItems(d, s), { keepSel: false })
+  toast('Gesperrt – zum Bearbeiten: Rechtsklick ▸ „Alle entsperren“ (⇧⌘L)')
+}
+
+/** ⇧⌘L: alle Sperren aufheben */
+export function unlockEverything() {
+  if (!hasLocked(getState().doc)) return toast('Es ist nichts gesperrt')
+  commit((d) => unlockAll(d))
+  toast('Alle Objekte entsperrt')
 }
 
 export function deleteSelection() {

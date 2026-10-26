@@ -350,6 +350,32 @@ const ICONS: Record<string, ReactElement> = {
   help: <path {...S} d="M10 17.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM7.7 7.6a2.4 2.4 0 0 1 4.6.8c0 1.6-2.3 2.2-2.3 2.2M10 13.8h.01" />,
   copy: <path {...S} d="M7 7V4.2A1.2 1.2 0 0 1 8.2 3h7.6A1.2 1.2 0 0 1 17 4.2v7.6a1.2 1.2 0 0 1-1.2 1.2H13M4.2 7h7.6A1.2 1.2 0 0 1 13 8.2v7.6a1.2 1.2 0 0 1-1.2 1.2H4.2A1.2 1.2 0 0 1 3 15.8V8.2A1.2 1.2 0 0 1 4.2 7z" />,
   // Anordnung: gefülltes Quadrat = ausgewähltes Objekt
+  group: (
+    <g {...S}>
+      <rect x="2.5" y="2.5" width="15" height="15" rx="1.5" strokeDasharray="2.4 1.8" />
+      <rect x="5.5" y="5.5" width="5" height="5" rx="0.8" />
+      <circle cx="12.8" cy="12.8" r="2.6" />
+    </g>
+  ),
+  ungroup: (
+    <g {...S}>
+      <rect x="3" y="3" width="6" height="6" rx="0.8" />
+      <circle cx="13.5" cy="13.5" r="3" />
+      <path d="M11 4.5h4.5V9M4.5 11v4.5H9" strokeDasharray="1.6 1.6" />
+    </g>
+  ),
+  lock: (
+    <g {...S}>
+      <rect x="4.5" y="9" width="11" height="8" rx="1.5" />
+      <path d="M7 9V6.5a3 3 0 0 1 6 0V9" />
+    </g>
+  ),
+  unlock: (
+    <g {...S}>
+      <rect x="4.5" y="9" width="11" height="8" rx="1.5" />
+      <path d="M7 9V6.5a3 3 0 0 1 5.8-1.1" />
+    </g>
+  ),
   'order-front': (
     <g>
       <rect {...S} x="3" y="3" width="9" height="9" rx="1.5" />

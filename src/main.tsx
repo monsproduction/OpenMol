@@ -10,14 +10,18 @@ import { startDesktop } from './desktopApp'
 import { startFileDrop } from './fileDrop'
 import { startSession } from './session'
 import { syncReactionLinks } from './model/reactionLink'
+import { pruneGroups } from './model/groups'
 
 // Nur in der Entwicklung: Zugriff für Tests über die Browser-Konsole
 if (import.meta.env.DEV) {
   ;(window as unknown as Record<string, unknown>).__app = { store, actions, scene, types }
 }
 
-// Ansatztabellen mit verknüpftem Reaktionspfeil bei jeder Änderung abgleichen
-store.setCommitHook(syncReactionLinks)
+// bei jeder Änderung: Ansatztabellen mit verknüpftem Reaktionspfeil abgleichen, Gruppen/Sperrliste aufräumen
+store.setCommitHook((d) => {
+  syncReactionLinks(d)
+  pruneGroups(d)
+})
 
 // Desktop-App: Menüleiste, Dateien, Fenster (im Browser ohne Wirkung)
 startDesktop()

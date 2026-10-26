@@ -13,8 +13,12 @@ import {
   expandGroups,
   fitView,
   insertAnalysis,
+  groupSelection,
+  lockSelection,
   selectAll,
   toggle3D,
+  ungroupSelection,
+  unlockEverything,
   zoomTo,
 } from './tools/actions'
 import { cleanReaction } from './tools/cleanup'
@@ -69,6 +73,10 @@ export function runMenuCommand(cmd: string) {
     copyImage: () => copyImageToClipboard(),
     duplicate: duplicateSelection,
     delete: deleteSelection,
+    group: groupSelection,
+    ungroup: ungroupSelection,
+    lock: lockSelection,
+    unlockAll: unlockEverything,
     selectAll: () => {
       selectAll()
       setTool('select')

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { linearizeTriples, selectionAtomIds } from '../model/ops'
 import { analyze, smilesToName, stereoCenters } from '../model/ocl'
 import { isotopePattern } from '../model/isotopePattern'
+import { hasLocked, inGroup } from '../model/groups'
 import type { ArrowKind, ArrowRoute, BondType, Cycle, DocStyle, DoublePos, Shape, ShapeKind } from '../model/types'
 import { CLOSED_SHAPES, FONTS, STYLE_PRESETS, emptySelection, selectionSize } from '../model/types'
 import type { FillStyle } from '../model/rings'
@@ -15,6 +16,10 @@ import { isRichLabel, richPlain, richToSymbolGreek } from '../model/richtext'
 import { attachCycle, newArcLabel, newBranch, redistribute, stationHalfGaps, stationLabelSize } from '../model/cycle'
 import {
   arrange,
+  groupSelection,
+  lockSelection,
+  ungroupSelection,
+  unlockEverything,
   bracketSelection,
   contractGroups,
   createStoichTable,
@@ -1191,6 +1196,8 @@ function DocSettings({ style, setStyle }: { style: DocStyle; setStyle: (p: Parti
 
 /** Ebenen: Vordergrund/Hintergrund, eine Ebene vor/zurück (für alle Objektarten) */
 function ArrangeBar() {
+  const grouped = useStore((st) => inGroup(st.doc, st.sel))
+  const locked = useStore((st) => hasLocked(st.doc))
   const btn = (mode: 'front' | 'forward' | 'backward' | 'back', icon: string, tip: string) => (
     <button className="icon-btn" data-tip={tip} onClick={() => arrange(mode)}>
       <Icon name={icon} size={18} />
@@ -1203,6 +1210,24 @@ function ArrangeBar() {
       {btn('forward', 'order-forward', 'Eine Ebene nach vorn (⌥⇧⌘F)')}
       {btn('backward', 'order-backward', 'Eine Ebene nach hinten (⌥⇧⌘B)')}
       {btn('back', 'order-back', 'In den Hintergrund (⇧⌘B)')}
+      <span className="arrange-sep" />
+      {grouped ? (
+        <button className="icon-btn" data-tip="Gruppierung aufheben (⇧⌘G)" onClick={ungroupSelection}>
+          <Icon name="ungroup" size={18} />
+        </button>
+      ) : (
+        <button className="icon-btn" data-tip="Gruppieren (⌘G): als eine Einheit auswählen und verschieben" onClick={groupSelection}>
+          <Icon name="group" size={18} />
+        </button>
+      )}
+      <button className="icon-btn" data-tip="Sperren (⌘L): nicht mehr anklickbar oder verschiebbar" onClick={lockSelection}>
+        <Icon name="lock" size={18} />
+      </button>
+      {locked && (
+        <button className="icon-btn" data-tip="Alle entsperren (⇧⌘L)" onClick={unlockEverything}>
+          <Icon name="unlock" size={18} />
+        </button>
+      )}
     </div>
   )
 }

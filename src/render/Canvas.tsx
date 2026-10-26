@@ -1,4 +1,5 @@
 import { useSettings } from '../settings'
+import { withGroups, withoutLocked } from '../model/groups'
 import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { bestBondAngle, buildGraph, textWidth, type Graph } from '../model/chem'
 import { SYMBOL_SET } from '../model/elements'
@@ -414,8 +415,16 @@ export function Canvas() {
     return { x: (e.clientX - rect.left - v.panX) / v.zoom, y: (e.clientY - rect.top - v.panY) / v.zoom }
   }
   const tol = Math.max(9 / z, fs * 0.4)
-  const hit = (p: Pt, extra: { lp?: boolean; only?: ('atom' | 'bond' | 'objects')[] } = {}) =>
-    hitTest(getScene(getState().doc), p, { tol, lonePairs: extra.lp, only: extra.only })
+  const hit = (p: Pt, extra: { lp?: boolean; only?: ('atom' | 'bond' | 'objects')[] } = {}) => {
+    const st = getState()
+    const h = hitTest(getScene(st.doc), p, { tol, lonePairs: extra.lp, only: extra.only })
+    // gesperrte Objekte: mit Auswahl, Lasso und Radierer nicht zu treffen (zum Entsperren: Rechtsklick ▸ Alle entsperren)
+    if (h && st.doc.locked && (st.tool === 'select' || st.tool === 'lasso' || st.tool === 'eraser')) {
+      const hs = hoverToSel(h)
+      if (selectionSize(withoutLocked(st.doc, hs)) < selectionSize(hs)) return null
+    }
+    return h
+  }
 
   // ---------- Griffe für ausgewählte Objekte ----------
   const selBox = useMemo(() => {
@@ -580,17 +589,19 @@ export function Canvas() {
       const h = hit(p)
       if (h) {
         let ns = st.sel
+        // Gruppen werden immer als Ganzes gewählt
+        const picked = withGroups(st.doc, completeSel(st.doc, hoverToSel(h)))
         if (e.shiftKey) {
-          ns = mergeSel(st.sel, completeSel(st.doc, hoverToSel(h)), selHas(st.sel, h))
+          ns = mergeSel(st.sel, picked, selHas(st.sel, h))
         } else if (!selHas(st.sel, h)) {
           // Klick wählt genau das getroffene Atom bzw. die Bindung; ein ganzes Molekül markiert der Doppelklick
-          ns = completeSel(st.doc, hoverToSel(h))
+          ns = picked
         }
         setState({ sel: ns })
         beginTx()
         drag.current = moveDrag(st.doc, completeSel(st.doc, ns), p, e.altKey)
         // Klick (ohne Ziehen) auf ein Atom/eine Bindung einer größeren Auswahl: danach nur dieses markieren
-        const one = completeSel(st.doc, hoverToSel(h))
+        const one = picked
         if (!e.shiftKey && (h.kind === 'atom' || h.kind === 'bond') && selectionSize(ns) > selectionSize(one) && drag.current.mode === 'move') drag.current.narrow = one
       } else if (selBox && selectionSize(st.sel) > 1 && !e.shiftKey && p.x >= selBox.x1 && p.x <= selBox.x2 && p.y >= selBox.y1 && p.y <= selBox.y2) {
         // Ziehen innerhalb des Auswahlrahmens verschiebt die Auswahl
@@ -1108,7 +1119,7 @@ export function Canvas() {
             ? { box: { x1: Math.min(d.start.x, p.x), y1: Math.min(d.start.y, p.y), x2: Math.max(d.start.x, p.x), y2: Math.max(d.start.y, p.y) } }
             : { poly: d.pts }
         if (d.mode === 'rect' && dist(d.start, p) * z < 3) return
-        const s = selectInRegion(getScene(st.doc), region)
+        const s = withGroups(st.doc, withoutLocked(st.doc, selectInRegion(getScene(st.doc), region)))
         setState({ sel: d.additive ? mergeSel(st.sel, s) : s })
         return
       }
@@ -1491,7 +1502,7 @@ export function Canvas() {
     const h = hit(p)
     // wie beim Klick nur das getroffene Objekt; Menüpunkte für ganze Moleküle (Name, Analyse …) erweitern dann selbst
     const pick = !!h && !selHas(st.sel, h) && (h.kind === 'atom' || h.kind === 'bond' || h.kind === 'lp')
-    if (h && !selHas(st.sel, h)) setState({ sel: completeSel(st.doc, hoverToSel(h)) })
+    if (h && !selHas(st.sel, h)) setState({ sel: withGroups(st.doc, completeSel(st.doc, hoverToSel(h))) })
     else if (!h) setState({ sel: emptySelection() })
     if (st.tool !== 'select' && st.tool !== 'lasso') setTool('select')
     setState({ contextMenu: { x: e.clientX, y: e.clientY, at: p, pick }, hover: null })
@@ -1525,11 +1536,11 @@ export function Canvas() {
       return
     }
     // Doppelklick auf Atom/Bindung markiert das ganze Molekül (beschriften: Enter oder Text-Werkzeug)
-    if (h.kind === 'atom' || h.kind === 'lp' || h.kind === 'decor') setState({ sel: fragmentSel(st.doc, h.id) })
+    if (h.kind === 'atom' || h.kind === 'lp' || h.kind === 'decor') setState({ sel: withGroups(st.doc, fragmentSel(st.doc, h.id)) })
     else if (h.kind === 'text') setState({ editing: { kind: 'text', id: h.id } })
     else if (h.kind === 'table') setState({ sel: { ...emptySelection(), tables: [h.id] }, tableEditor: h.id })
     else if (h.kind === 'bond') {
-      setState({ sel: fragmentSel(st.doc, st.doc.bonds[h.id].a1) })
+      setState({ sel: withGroups(st.doc, fragmentSel(st.doc, st.doc.bonds[h.id].a1)) })
     }
   }
 

@@ -430,6 +430,18 @@ export interface Doc {
   cycles: Record<Id, Cycle>
   tables: Record<Id, StoichTable>
   style: DocStyle
+  /** Gruppen (⌘G): werden immer als Ganzes ausgewählt, siehe model/groups.ts */
+  groups?: Record<Id, Group>
+  /** gesperrte Objekte (nicht anklickbar/verschiebbar) */
+  locked?: ObjLists
+}
+
+/** Listen von Objekt-Ids je Art (wie eine Auswahl, alle Arten optional) */
+export type ObjLists = Partial<Record<ObjKind, Id[]>>
+
+export interface Group {
+  id: Id
+  items: ObjLists
 }
 
 export type ObjKind = 'atoms' | 'bonds' | 'arrows' | 'curved' | 'texts' | 'shapes' | 'fills' | 'cycles' | 'tables'
@@ -645,6 +657,32 @@ export function normalizeDoc(raw: Partial<Doc>): Doc {
     }
     if (t.targetConc !== undefined && !(ok(t.targetConc) && t.targetConc > 0)) delete t.targetConc
     if (t.link && (typeof t.link !== 'object' || typeof t.link.arrow !== 'string')) delete t.link
+  }
+  // Gruppen und Sperrliste: nur Listen von Ids (fehlende Objekte räumt pruneGroups beim nächsten Bearbeiten weg)
+  const ids = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : undefined)
+  const lists = (v: unknown): ObjLists | undefined => {
+    if (!v || typeof v !== 'object') return undefined
+    const out: ObjLists = {}
+    for (const k of ['atoms', 'bonds', 'arrows', 'curved', 'texts', 'shapes', 'fills', 'cycles', 'tables'] as const) {
+      const l = ids((v as Record<string, unknown>)[k])
+      if (l?.length) out[k] = l
+    }
+    return Object.keys(out).length ? out : undefined
+  }
+  if (d.groups !== undefined) {
+    const g: Record<Id, Group> = {}
+    if (d.groups && typeof d.groups === 'object')
+      for (const [id, x] of Object.entries(d.groups)) {
+        const items = lists((x as Group | null)?.items)
+        if (items) g[id] = { id, items }
+      }
+    if (Object.keys(g).length) d.groups = g
+    else delete d.groups
+  }
+  if (d.locked !== undefined) {
+    const l = lists(d.locked)
+    if (l) d.locked = l
+    else delete d.locked
   }
   for (const k of ['arrows', 'texts', 'shapes'] as const) for (const id in d[k]) if (!d[k][id]) delete d[k][id]
   for (const id in d.arrows) if (![d.arrows[id].x1, d.arrows[id].y1, d.arrows[id].x2, d.arrows[id].y2].every(ok)) delete d.arrows[id]
