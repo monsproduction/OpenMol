@@ -727,8 +727,10 @@ export function pasteClip(d: Doc, c: ClipData, dx: number, dy: number): Selectio
     d.bonds[id] = { ...b, id, a1: am.get(b.a1)!, a2: am.get(b.a2)! }
     sel.bonds.push(id)
   }
+  const arm = new Map<Id, Id>()
   for (const a of c.arrows) {
     const id = uid('r')
+    arm.set(a.id, id)
     d.arrows[id] = { ...a, id, x1: a.x1 + dx, x2: a.x2 + dx, y1: a.y1 + dy, y2: a.y2 + dy }
     sel.arrows.push(id)
   }
@@ -781,6 +783,13 @@ export function pasteClip(d: Doc, c: ClipData, dx: number, dy: number): Selectio
         const atom = r.atom ? (am.get(r.atom) ?? (d.atoms[r.atom] ? r.atom : undefined)) : undefined
         return { ...r, id: uid('sr'), atom }
       }),
+    }
+    // Verknüpfung mit dem Reaktionspfeil nur, wenn der Pfeil mitkopiert wurde (sonst glichen zwei Tabellen einen Pfeil ab)
+    const tt = d.tables[id]
+    if (tt.link) {
+      const na = arm.get(tt.link.arrow)
+      if (na) tt.link = { ...tt.link, arrow: na }
+      else delete tt.link
     }
     sel.tables.push(id)
   }

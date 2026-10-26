@@ -521,34 +521,92 @@ export interface ParsedConditions {
   temperature?: string
   time?: string
   atmosphere?: string
+  /** Zielkonzentration aus „THF (0.1 M)“ */
+  targetConc?: number
   rows: StoichRow[]
 }
 
 // Bausteine eines Pfeiltexts erkennen (auch für den Abgleich Pfeil ↔ Ansatztabelle, siehe reactionLink.ts)
-export const isTemperature = (tok: string) =>
-  /^(?:[-−–]?\d+(?:[.,]\d+)?\s*(?:[-−–]\s*[-−–]?\d+(?:[.,]\d+)?\s*)?°\s*C|RT|rt|r\.t\.|Raumtemperatur|room temperature|reflux|Rückfluss|Δ)$/.test(tok.trim())
-export const isTime = (tok: string) => /^(\d+(?:[.,]\d+)?\s*(?:h|min|d|s|Std\.?)|overnight|über Nacht|o\/n)$/i.test(tok.trim())
-export const isAtmosphere = (tok: string) => /^(N2|Ar|Argon|Stickstoff|nitrogen|argon|Luft|air|O2)$/i.test(tok.trim())
+const ONE_TEMP = String.raw`(?:[<>≤≥~]?\s*[-−–]?\d+(?:[.,]\d+)?\s*(?:(?:[-−–]|bis|to)\s*[-−–]?\d+(?:[.,]\d+)?\s*)?[°º]\s*C|RT|rt|r\.t\.|Raumtemperatur|room temperature|reflux|Rückfluss|Δ)`
+/** Temperatur bzw. Verlauf: „80 °C“, „0–5 °C“, „rt“, „−78 °C → RT“, „0 °C to rt“ */
+export const isTemperature = (tok: string) => new RegExp(`^${ONE_TEMP}(?:\\s*(?:→|->|⟶|to|bis|then|dann)\\s*${ONE_TEMP})*$`).test(tok.trim())
+export const isTime = (tok: string) =>
+  /^(\d+(?:[.,]\d+)?\s*(?:[-−–]\s*\d+(?:[.,]\d+)?\s*)?(?:h|hrs?|min\.?|minutes|d|days?|Tage?|s|Std\.?|Stunden)|overnight|über Nacht|o\/n|o\.n\.)$/i.test(tok.trim())
+export const isAtmosphere = (tok: string) =>
+  /^(?:under|unter)?\s*(?:N2|N₂|Ar|Argon|Stickstoff|nitrogen|argon|Luft|air|O2|O₂)(?:\s*(?:atm\.?|atmosphere|Atmosphäre|-Atmosphäre))?$/i.test(tok.trim())
+
+/** Zusätze an Lösungsmitteln, die nichts am Stoff ändern: „dry THF“, „abs. EtOH“, „THF (abs.)“, „entgastes DMF“ */
+const SOLV_PREFIX = /^(?:dry|abs\.?|absolute|anhydrous|anhydr\.?|wasserfrei(?:es|em)?|trocken(?:es|em)?|degassed|entgast(?:es|em)?|frisch dest\.?|dest\.?)\s+/i
+const SOLV_NOTE = /\s*\(\s*(?:dry|abs\.?|absolut|anhydrous|anhydr\.?|wasserfrei|trocken|degassed|entgast)\s*\)\s*$/i
+
+/** Konzentration als Zahl aus „0.1 M“, „0,1 mol/L“, „c = 0.1 M“ (sonst null) */
+export function concValue(s: string): number | null {
+  const m = /^\s*(?:c\s*=\s*)?([\d.,]+)\s*(?:M|mol\/L|mol\/l|mol L-1|mol·L−1)\s*$/.exec(s)
+  const v = m ? parseNum(m[1]) : null
+  return v !== null && v > 0 ? v : null
+}
 
 /**
- * Lösungsmittel bzw. Gemisch: „THF“, „Toluol/H2O“, „THF/H2O (4:1)“, „AcOH/H2O/H2SO4“. Ein einzelner Name zählt nur,
- * wenn er in der Bibliothek als Lösungsmittel steht; ein Gemisch, wenn mindestens ein Teil ein Lösungsmittel ist und
- * alle Teile bekannte Stoffe oder Summenformeln sind. Das Verhältnis in Klammern wird zu Volumenteilen.
+ * Lösungsmittel-Angabe zerlegen, ohne zu prüfen, ob die Stoffe bekannt sind: Namen (getrennt durch „/“ oder „–“),
+ * Volumenteile („(4:1)“ oder „4:1“) und Zielkonzentration („(0.1 M)“, „(4:1, 0.2 M)“). Zusätze wie „dry“ fallen weg.
  */
-export function solventMix(tok: string): { names: string[]; parts?: number[] } | null {
-  const t = tok.trim()
-  const rm = /\s*\(\s*([\d.,]+(?:\s*:\s*[\d.,]+)+)\s*(?:v\/v)?\s*\)\s*$/.exec(t)
-  const body = rm ? t.slice(0, rm.index).trim() : t
-  const names = body.split('/').map((x) => x.trim())
-  if (!names.every(Boolean)) return null
-  const known = (x: string) => !!libLookup(x) || (/^[A-Z][A-Za-z0-9]*$/.test(x) && formulaMW(x) !== null)
-  if (names.length === 1 ? !libLookup(names[0])?.solvent : !(names.some((x) => libLookup(x)?.solvent) && names.every(known))) return null
+export function splitSolvents(tok: string): { names: string[]; parts?: number[]; conc?: number } | null {
+  let t = tok.trim().replace(SOLV_NOTE, '')
   let parts: number[] | undefined
-  if (rm) {
-    const p = rm[1].split(':').map((x) => parseNum(x))
-    if (p.length === names.length && p.every((x) => x !== null && x > 0)) parts = p as number[]
+  let conc: number | undefined
+  // Klammer am Ende: Verhältnis und/oder Konzentration
+  const br = /\s*\(([^()]*)\)\s*$/.exec(t)
+  const ratioOf = (x: string) => {
+    if (!/^\s*[\d.,]+(?:\s*:\s*[\d.,]+)+\s*(?:v\/v)?\s*$/.test(x)) return null
+    const p = x.replace(/v\/v/, '').split(':').map((y) => parseNum(y))
+    return p.every((y) => y !== null && y > 0) ? (p as number[]) : null
   }
-  return { names, parts }
+  if (br) {
+    // Trennung an „;“ oder „, “ – nicht im Dezimalkomma („0,1 M“)
+    const items = br[1].split(/;|,\s+/).map((x) => x.trim())
+    const r = items.map(ratioOf)
+    const c = items.map(concValue)
+    if (items.every((x, k) => r[k] || c[k])) {
+      parts = r.find(Boolean) ?? undefined
+      conc = c.find((x) => x !== null) ?? undefined
+      t = t.slice(0, br.index).trim()
+    } else return null
+  }
+  // Verhältnis ohne Klammer: „THF/H2O 4:1“
+  const tail = /\s+([\d.,]+(?:\s*:\s*[\d.,]+)+)\s*(?:v\/v)?$/.exec(t)
+  if (tail && !parts) {
+    parts = ratioOf(tail[1]) ?? undefined
+    t = t.slice(0, tail.index).trim()
+  }
+  const names = t.split(/\s*[/–]\s*/).map((x) => x.trim().replace(SOLV_PREFIX, '').replace(SOLV_NOTE, ''))
+  if (!names.length || !names.every(Boolean)) return null
+  // doppelte Namen nur einmal
+  const seen = new Set<string>()
+  const uniq: string[] = []
+  const up: number[] = []
+  names.forEach((n, k) => {
+    const key = (libLookup(n)?.names[0] ?? n).toLowerCase()
+    if (seen.has(key)) return
+    seen.add(key)
+    uniq.push(n)
+    if (parts) up.push(parts[k])
+  })
+  return { names: uniq, parts: parts && parts.length === names.length && uniq.length > 1 ? up : undefined, conc }
+}
+
+/**
+ * Lösungsmittel bzw. Gemisch erkennen: „THF“, „dry THF“, „Toluol/H2O“, „THF/H2O (4:1)“, „THF (0.1 M)“,
+ * „AcOH/H2O/H2SO4“. Ein einzelner Name zählt nur, wenn er in der Bibliothek als Lösungsmittel steht; ein Gemisch, wenn
+ * mindestens ein Teil ein Lösungsmittel ist und alle Teile bekannte Stoffe oder Summenformeln sind.
+ */
+export function solventMix(tok: string): { names: string[]; parts?: number[]; conc?: number } | null {
+  const r = splitSolvents(tok)
+  if (!r) return null
+  // „NaHMDS (2.0 M in THF)“ ist eine Lösung, kein Lösungsmittel
+  if (/\bin\b/.test(tok)) return null
+  const known = (x: string) => !!libLookup(x) || (/^[A-Z][A-Za-z0-9]*$/.test(x) && formulaMW(x) !== null)
+  const ok = r.names.length === 1 ? !!libLookup(r.names[0])?.solvent : r.names.some((x) => libLookup(x)?.solvent) && r.names.every(known)
+  return ok ? r : null
 }
 
 /** Pfeiltext (z. B. „NaHMDS (2.1 equiv), THF, 80 °C, 16 h, N2“) in Reagenzien, Lösungsmittel und Bedingungen zerlegen */
@@ -586,8 +644,9 @@ export function parseConditionText(plain: string): ParsedConditions {
     }
     // Lösungsmittelgemische „Toluol/H2O“, „THF/H2O (4:1)“ → einzelne Lösungsmittel mit Volumenteilen
     const mix = solventMix(tok)
-    if (mix && mix.names.length > 1) {
+    if (mix) {
       mix.names.forEach((x, i) => out.rows.push({ ...rowFromName(x, 'solvent'), role: 'solvent', parts: mix.parts?.[i] }))
+      if (mix.conc) out.targetConc = mix.conc
       continue
     }
     // Äquivalente in Klammern: „K2CO3 (2.0 equiv)“, „NaH (1,5 Äq.)“
