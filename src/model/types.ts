@@ -383,6 +383,8 @@ export interface StoichRow {
   solvent?: string
   /** Produkt: erhaltene Masse in g */
   obtained?: number
+  /** Lösungsmittel: Anteil im Gemisch (Volumenteile, z. B. 5 und 1 für 5:1 v/v) – mit Zielkonzentration der Tabelle */
+  parts?: number
   units?: Partial<Record<StoichUnitKey, string>>
 }
 
@@ -397,9 +399,24 @@ export interface StoichTable {
   time?: string
   atmosphere?: string
   notes?: string
+  /** Zielkonzentration (mol/L) des Bezugsedukts in allen Lösungsmitteln: die Lösungsmittel-Volumina werden berechnet */
+  targetConc?: number
+  /** verknüpfter Reaktionspfeil; Bedingungen und Lösungsmittel werden in beide Richtungen abgeglichen */
+  link?: ReactionLink
   /** Schriftgröße relativ zur Dokumentschrift */
   scale?: number
   order?: number
+}
+
+/** Verknüpfung Ansatztabelle ↔ Reaktionspfeil samt den zuletzt abgeglichenen Werten (daran erkennt der Abgleich, welche
+ *  Seite sich geändert hat) */
+export interface ReactionLink {
+  arrow: Id
+  temperature?: string
+  time?: string
+  atmosphere?: string
+  /** Lösungsmittel als Schlüssel, z. B. „acoh/h2o|5:1“ */
+  solvents?: string
 }
 
 export interface Doc {
@@ -622,7 +639,12 @@ export function normalizeDoc(raw: Partial<Doc>): Doc {
     t.id = id
     if (t.lang !== 'en') t.lang = 'de'
     t.rows = t.rows.filter((r) => r && typeof r.id === 'string')
-    for (const r of t.rows) if (r.atom && !d.atoms[r.atom]) delete r.atom
+    for (const r of t.rows) {
+      if (r.atom && !d.atoms[r.atom]) delete r.atom
+      if (r.parts !== undefined && !(ok(r.parts) && r.parts > 0)) delete r.parts
+    }
+    if (t.targetConc !== undefined && !(ok(t.targetConc) && t.targetConc > 0)) delete t.targetConc
+    if (t.link && (typeof t.link !== 'object' || typeof t.link.arrow !== 'string')) delete t.link
   }
   for (const k of ['arrows', 'texts', 'shapes'] as const) for (const id in d[k]) if (!d[k][id]) delete d[k][id]
   for (const id in d.arrows) if (![d.arrows[id].x1, d.arrows[id].y1, d.arrows[id].x2, d.arrows[id].y2].every(ok)) delete d.arrows[id]

@@ -375,11 +375,6 @@ export function computeTable(doc: Doc, t: StoichTable): TableCalc {
       }
       // eingesetzte Lösung: ihr Volumen gehört zum Reaktionsvolumen
       if (r.conc && c.V) solventV += c.V
-    } else if (r.role === 'solvent') {
-      c.V = r.volume
-      c.m = r.volume !== undefined && r.density ? r.volume * 1000 * r.density : undefined
-      c.n = c.m !== undefined && c.mw ? c.m / c.mw : undefined
-      if (r.volume) solventV += r.volume
     } else if (r.role === 'product') {
       c.eq = r.eq ?? 1
       c.theoN = nRef !== undefined ? c.eq * nRef : undefined
@@ -388,6 +383,18 @@ export function computeTable(doc: Doc, t: StoichTable): TableCalc {
       c.yieldPct = c.obtN !== undefined && c.theoN ? (c.obtN / c.theoN) * 100 : undefined
     }
   })
+  // Lösungsmittel zuletzt: mit Zielkonzentration ergibt sich ihr Gesamtvolumen aus der Stoffmenge des Bezugsedukts
+  // (abzüglich der Volumina eingesetzter Lösungen), aufgeteilt nach Volumenteilen (ohne Angabe je 1 Teil)
+  const solv = t.rows.map((r, i) => [r, i] as const).filter(([r]) => r.role === 'solvent')
+  const target = t.targetConc && nRef !== undefined && solv.length ? Math.max(0, nRef / t.targetConc - solventV) : undefined
+  const sumParts = solv.reduce((a, [r]) => a + (r.parts ?? 1), 0)
+  for (const [r, i] of solv) {
+    const c = rows[i]
+    c.V = target !== undefined ? (target * (r.parts ?? 1)) / sumParts : r.volume
+    c.m = c.V !== undefined && r.density ? c.V * 1000 * r.density : undefined
+    c.n = c.m !== undefined && c.mw ? c.m / c.mw : undefined
+    if (c.V) solventV += c.V
+  }
   return { rows, nRef, refIndex, solventV: solventV || undefined, cRef: nRef !== undefined && solventV ? nRef / solventV : undefined }
 }
 
@@ -445,13 +452,19 @@ export function formulaHtml(f: string): string {
   return f.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/(\d+)/g, '<sub>$1</sub>')
 }
 
+/**
+ * Stoffname als Rich-Text: Namen, die wie eine Formel geschrieben sind (K2CO3, Pd(PPh3)4, Et3N, CH2Cl2), bekommen
+ * tiefgestellte Ziffern; echte Namen mit Ziffern (1,4-Dioxan, 2-MeTHF, 18-Krone-6) bleiben unverändert
+ */
+export function chemNameHtml(x: string): string {
+  const esc = (y: string) => y.replace(/&/g, '&amp;').replace(/</g, '&lt;')
+  return /^[A-Z([][A-Za-z0-9()[\]·]*$/.test(x) && /[A-Za-z)\]]\d/.test(x) ? formulaHtml(x) : esc(x)
+}
+
 /** Anzeigename einer Zeile (Rich-Text) */
 export function rowNameHtml(doc: Doc, r: StoichRow): string {
-  const esc = (x: string) => x.replace(/&/g, '&amp;').replace(/</g, '&lt;')
   const info = rowMW(doc, r)
-  // Namen, die wie eine Formel geschrieben sind (K2CO3, Pd(PPh3)4, Et3N, CH2Cl2): Ziffern tiefstellen;
-  // echte Namen mit Ziffern (1,4-Dioxan, 2-MeTHF, 18-Krone-6) bleiben unverändert
-  const nameHtml = (x: string) => (/^[A-Z([][A-Za-z0-9()[\]·]*$/.test(x) && /[A-Za-z)\]]\d/.test(x) ? formulaHtml(x) : esc(x))
+  const nameHtml = chemNameHtml
   const nm = r.name?.trim()
   const base = nm ? nameHtml(nm) : info.formula ? formulaHtml(info.formula) : '–'
   // Lösung: „NaHMDS (in n-Hexan)“, „EtMgBr (in Et₂O)“ – die Konzentration steht in der eigenen Spalte c
@@ -511,6 +524,33 @@ export interface ParsedConditions {
   rows: StoichRow[]
 }
 
+// Bausteine eines Pfeiltexts erkennen (auch für den Abgleich Pfeil ↔ Ansatztabelle, siehe reactionLink.ts)
+export const isTemperature = (tok: string) =>
+  /^(?:[-−–]?\d+(?:[.,]\d+)?\s*(?:[-−–]\s*[-−–]?\d+(?:[.,]\d+)?\s*)?°\s*C|RT|rt|r\.t\.|Raumtemperatur|room temperature|reflux|Rückfluss|Δ)$/.test(tok.trim())
+export const isTime = (tok: string) => /^(\d+(?:[.,]\d+)?\s*(?:h|min|d|s|Std\.?)|overnight|über Nacht|o\/n)$/i.test(tok.trim())
+export const isAtmosphere = (tok: string) => /^(N2|Ar|Argon|Stickstoff|nitrogen|argon|Luft|air|O2)$/i.test(tok.trim())
+
+/**
+ * Lösungsmittel bzw. Gemisch: „THF“, „Toluol/H2O“, „THF/H2O (4:1)“, „AcOH/H2O/H2SO4“. Ein einzelner Name zählt nur,
+ * wenn er in der Bibliothek als Lösungsmittel steht; ein Gemisch, wenn mindestens ein Teil ein Lösungsmittel ist und
+ * alle Teile bekannte Stoffe oder Summenformeln sind. Das Verhältnis in Klammern wird zu Volumenteilen.
+ */
+export function solventMix(tok: string): { names: string[]; parts?: number[] } | null {
+  const t = tok.trim()
+  const rm = /\s*\(\s*([\d.,]+(?:\s*:\s*[\d.,]+)+)\s*(?:v\/v)?\s*\)\s*$/.exec(t)
+  const body = rm ? t.slice(0, rm.index).trim() : t
+  const names = body.split('/').map((x) => x.trim())
+  if (!names.every(Boolean)) return null
+  const known = (x: string) => !!libLookup(x) || (/^[A-Z][A-Za-z0-9]*$/.test(x) && formulaMW(x) !== null)
+  if (names.length === 1 ? !libLookup(names[0])?.solvent : !(names.some((x) => libLookup(x)?.solvent) && names.every(known))) return null
+  let parts: number[] | undefined
+  if (rm) {
+    const p = rm[1].split(':').map((x) => parseNum(x))
+    if (p.length === names.length && p.every((x) => x !== null && x > 0)) parts = p as number[]
+  }
+  return { names, parts }
+}
+
 /** Pfeiltext (z. B. „NaHMDS (2.1 equiv), THF, 80 °C, 16 h, N2“) in Reagenzien, Lösungsmittel und Bedingungen zerlegen */
 export function parseConditionText(plain: string): ParsedConditions {
   const out: ParsedConditions = { rows: [] }
@@ -532,18 +572,22 @@ export function parseConditionText(plain: string): ParsedConditions {
     if (!tokens[i]) tokens.splice(i, 1)
   }
   for (let tok of tokens) {
-    const temp = /^(?:[-−–]?\d+(?:[.,]\d+)?\s*(?:[-−–]\s*[-−–]?\d+(?:[.,]\d+)?\s*)?°\s*C|RT|rt|r\.t\.|Raumtemperatur|room temperature|reflux|Rückfluss|Δ)$/.exec(tok)
-    if (temp) {
+    if (isTemperature(tok)) {
       out.temperature = tok
       continue
     }
-    const time = /^(\d+(?:[.,]\d+)?\s*(?:h|min|d|s|Std\.?)|overnight|über Nacht|o\/n)$/i.exec(tok)
-    if (time) {
+    if (isTime(tok)) {
       out.time = tok
       continue
     }
-    if (/^(N2|Ar|Argon|Stickstoff|nitrogen|argon|Luft|air|O2)$/i.test(tok)) {
+    if (isAtmosphere(tok)) {
       out.atmosphere = tok
+      continue
+    }
+    // Lösungsmittelgemische „Toluol/H2O“, „THF/H2O (4:1)“ → einzelne Lösungsmittel mit Volumenteilen
+    const mix = solventMix(tok)
+    if (mix && mix.names.length > 1) {
+      mix.names.forEach((x, i) => out.rows.push({ ...rowFromName(x, 'solvent'), role: 'solvent', parts: mix.parts?.[i] }))
       continue
     }
     // Äquivalente in Klammern: „K2CO3 (2.0 equiv)“, „NaH (1,5 Äq.)“
@@ -569,12 +613,6 @@ export function parseConditionText(plain: string): ParsedConditions {
         cat = true
       }
       tok = tok.slice(0, mp.index).trim()
-    }
-    // Lösungsmittelgemische „Toluol/H2O“, „THF/H2O (4:1)“ → einzelne Lösungsmittel
-    const mix = tok.replace(/\s*\([\d.,:\s]+\)\s*$/, '').split('/')
-    if (mix.length > 1 && mix.every((x) => libLookup(x)?.solvent)) {
-      for (const x of mix) out.rows.push(rowFromName(x, 'solvent'))
-      continue
     }
     const row = rowFromName(tok)
     if (cat) row.role = 'catalyst'

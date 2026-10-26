@@ -1,4 +1,5 @@
 // Befehle, die von Menüs, Tastenkürzeln und der Zeichenfläche gemeinsam genutzt werden.
+import { linkTable } from '../model/reactionLink'
 import { isotopePattern } from '../model/isotopePattern'
 import { buildGraph, fragments } from '../model/chem'
 import { boxFromPts, mid, type Box } from '../model/geom'
@@ -1264,6 +1265,8 @@ export function createStoichTable() {
   const id = uid('st')
   commit((dd) => {
     dd.tables[id] = { id, x: rb ? rb.x1 : 0, y: rb ? rb.y2 + L * 1.2 : 0, lang: getSettings().uiLang, rows, temperature, time, atmosphere }
+    // mit dem Pfeil verknüpfen: Bedingungen und Lösungsmittel bleiben in beiden gleich
+    if (ar) linkTable(dd, id, ar.id)
   })
   setState({ sel: { ...emptySelection(), tables: [id] }, tableEditor: id })
   toast(ref ? 'Ansatztabelle angelegt – Menge des Bezugsedukts eingeben' : 'Ansatztabelle angelegt')

@@ -22,6 +22,7 @@ import { useSettings } from '../settings'
 import { Icon } from './Icons'
 import { GHS_NAMES, GhsIcon } from '../render/Ghs'
 import { fillSafety } from '../tools/safety'
+import { linkTable, nearestArrow } from '../model/reactionLink'
 
 /** Zahl > 0 aus einer Eingabe (sonst null) – für Äquivalente, Molmasse, Dichte */
 const positive = (v: string): number | null => {
@@ -52,10 +53,15 @@ const T = {
     time: 'Zeit',
     atm: 'Atmosphäre',
     notes: 'Notizen',
-    hint: 'Mengen mit Einheit eintippen (z. B. 105 mg, 0,2 mL, 1,5 mmol). Lösung: Konzentration bei c eintragen (z. B. 2) – das Volumen wird berechnet. Graue Werte sind berechnet. ★ = Bezug.',
+    hint: 'Mengen mit Einheit eintippen (z. B. 105 mg, 0,2 mL, 1,5 mmol). Lösung: Konzentration bei c eintragen (z. B. 2) – das Volumen wird berechnet. Lösungsmittel: Ziel-c unten eintragen, Gemische mit Teilen (z. B. 5 und 1) – die Volumina werden berechnet. Graue Werte sind berechnet. ★ = Bezug.',
     auto: 'automatisch',
     cref: 'Konzentration (Bezug)',
     theo: 'theor.',
+    target: 'Ziel-c',
+    parts: 'Teile',
+    linked: 'mit Pfeil verknüpft',
+    link: 'Mit Pfeil verknüpfen',
+    unlink: 'Lösen',
   },
   en: {
     title: 'Stoichiometry table',
@@ -79,10 +85,15 @@ const T = {
     time: 'Time',
     atm: 'Atmosphere',
     notes: 'Notes',
-    hint: 'Type amounts with units (e.g. 105 mg, 0.2 mL, 1.5 mmol). Solution: enter the concentration under c (e.g. 2) – the volume is calculated. Grey values are calculated. ★ = reference.',
+    hint: 'Type amounts with units (e.g. 105 mg, 0.2 mL, 1.5 mmol). Solution: enter the concentration under c (e.g. 2) – the volume is calculated. Solvents: enter target c below, mixtures with parts (e.g. 5 and 1) – volumes are calculated. Grey values are calculated. ★ = reference.',
     auto: 'automatic',
     cref: 'Concentration (ref.)',
     theo: 'theor.',
+    target: 'Target c',
+    parts: 'parts',
+    linked: 'linked to arrow',
+    link: 'Link to arrow',
+    unlink: 'Unlink',
   },
 }
 
@@ -167,6 +178,7 @@ export function StoichEditor() {
   if (!id || !t || !calc) return null
   const L = t.lang
   const S = T[L]
+  const nSolv = t.rows.filter((r) => r.role === 'solvent').length
   const num = (v: number | undefined, d?: number) => (v === undefined || !Number.isFinite(v) ? '' : fmtNum(v, L, d))
   // Menge in der gewählten (oder automatischen) Einheit
   const qty = (kind: QtyKind, v: number | undefined, chosen?: string) => {
@@ -367,6 +379,29 @@ export function StoichEditor() {
         <button className="btn small" onClick={() => void findCas(t.rows)} data-tip={L === 'de' ? 'CAS-Nummern und GHS-Symbole aller Stoffe in PubChem suchen (online; vorhandene CAS-Nummern bleiben)' : 'Look up CAS numbers and GHS pictograms in PubChem (online)'}>
           <Icon name="search" size={13} /> {S.casFind}
         </button>
+        {t.link ? (
+          <span className="st-linked small" data-tip={L === 'de' ? 'Temperatur, Zeit, Atmosphäre und Lösungsmittel werden mit dem Reaktionspfeil abgeglichen – eine Änderung hier oder am Pfeil gilt für beide' : 'Temperature, time, atmosphere and solvents are kept in sync with the reaction arrow'}>
+            ⚭ {S.linked}
+            <button className="btn small" onClick={() => updateTable(t.id, (tt) => delete tt.link)} data-tip={L === 'de' ? 'Verknüpfung lösen (Tabelle und Pfeil bleiben, wie sie sind)' : 'Remove the link (table and arrow stay as they are)'}>
+              {S.unlink}
+            </button>
+          </span>
+        ) : (
+          Object.keys(doc.arrows).length > 0 && (
+            <button
+              className="btn small"
+              data-tip={L === 'de' ? 'Mit dem nächstgelegenen Reaktionspfeil verknüpfen: fehlende Bedingungen und Lösungsmittel werden auf beiden Seiten ergänzt, danach bleiben beide gleich' : 'Link to the nearest reaction arrow: missing conditions and solvents are filled in on both sides, then both stay in sync'}
+              onClick={() =>
+                commit((d) => {
+                  const ar = d.tables[t.id] ? nearestArrow(d, d.tables[t.id]) : null
+                  if (ar) linkTable(d, t.id, ar)
+                })
+              }
+            >
+              ⚭ {S.link}
+            </button>
+          )
+        )}
         <span className="muted small grow">{S.hint}</span>
         <button className="icon-btn" onClick={() => setState({ tableEditor: null })} aria-label="Schließen" data-tip="Editor schließen (Tabelle bleibt im Schema)">
           <Icon name="close" size={16} />
@@ -439,14 +474,17 @@ export function StoichEditor() {
                     const v = k === 'n' ? c.n : k === 'm' ? c.m : c.V
                     if (isSolv && k === 'n') return <td key={k} />
                     const drv = k === 'n' ? 'moles' : k === 'm' ? 'mass' : 'volume'
-                    const entered = isSolv ? k === 'V' : r.driver === drv
-                    const editable = !(isSolv && k !== 'V')
+                    const fromTarget = isSolv && t.targetConc !== undefined
+                    const entered = isSolv ? k === 'V' && !fromTarget : r.driver === drv
+                    const editable = !(isSolv && (k !== 'V' || fromTarget))
                     return (
                       <td key={k} className="qty">
                         {editable ? (
                           <Cell value={qty(k, v, r.units?.[k])} width={58} muted={!entered} onCommit={(txt) => setAmount(r, k, k, txt, v)} />
                         ) : (
-                          <span className="st-val calc">{qty(k, v, r.units?.[k])}</span>
+                          <span className="st-val calc" title={fromTarget && k === 'V' ? (L === 'de' ? 'aus der Zielkonzentration berechnet (Ziel-c unten leeren, um Volumina selbst einzugeben)' : 'calculated from the target concentration (clear target c below to enter volumes)') : undefined}>
+                            {qty(k, v, r.units?.[k])}
+                          </span>
                         )}
                         <UnitSel kind={k} value={v} chosen={r.units?.[k]} auto={S.auto} onChange={(u) => updateRow(t.id, r.id, (rr) => (rr.units = { ...rr.units, [k]: u }))} />
                       </td>
@@ -468,6 +506,18 @@ export function StoichEditor() {
                     <Unit u="g/mL" />
                   </td>
                   <td className="st-rhoc">
+                    {isSolv && (nSolv > 1 || t.targetConc !== undefined) && (
+                      <>
+                        <Cell
+                          value={r.parts !== undefined ? num(r.parts, Number.isInteger(r.parts) ? 0 : 2) : ''}
+                          placeholder="1"
+                          title={L === 'de' ? 'Anteil im Lösungsmittelgemisch in Volumenteilen (z. B. 5 und 1 für 5:1 v/v); ohne Angabe 1 Teil' : 'share of the solvent mixture in volume parts (e.g. 5 and 1 for 5:1 v/v); empty = 1 part'}
+                          width={40}
+                          onCommit={(v) => updateRow(t.id, r.id, (rr) => (rr.parts = positive(v) ?? (v.trim() ? rr.parts : undefined)))}
+                        />
+                        <Unit u={S.parts} />
+                      </>
+                    )}
                     {!isSolv && (
                       <Cell
                         value={num(r.conc, 2)}
@@ -623,6 +673,29 @@ export function StoichEditor() {
           <label className="grow">
             {S.notes}
             <Cell value={t.notes ?? ''} align="left" placeholder="" onCommit={(v) => updateTable(t.id, (tt) => (tt.notes = v.trim() || undefined))} />
+          </label>
+          <label data-tip={L === 'de' ? 'Zielkonzentration des Bezugsedukts in allen Lösungsmitteln (mol/L): die Volumina der Lösungsmittel werden daraus berechnet und nach ihren Teilen aufgeteilt (eingesetzte Lösungen zählen mit)' : 'target concentration of the reference in all solvents (mol/L): solvent volumes are calculated and split by their parts (solutions used count too)'}>
+            {S.target}
+            <Cell
+              value={t.targetConc !== undefined ? num(t.targetConc, 3) : ''}
+              align="left"
+              width={54}
+              placeholder="0,4"
+              onCommit={(v) =>
+                updateTable(t.id, (tt) => {
+                  const m = /^\s*([\d.,]+)\s*(?:M|mol\/L|mol\/l)?\s*$/.exec(v)
+                  if (!v.trim()) {
+                    // berechnete Volumina als Eingaben übernehmen, damit nichts springt
+                    if (tt.targetConc !== undefined)
+                      tt.rows.forEach((r, i) => {
+                        if (r.role === 'solvent' && calc.rows[i]?.V !== undefined) r.volume = calc.rows[i].V
+                      })
+                    tt.targetConc = undefined
+                  } else if (m) tt.targetConc = positive(m[1]) ?? tt.targetConc
+                })
+              }
+            />
+            <Unit u="mol/L" />
           </label>
           {calc.cRef !== undefined && (
             <span className="muted small">

@@ -2133,6 +2133,14 @@ code {
 
 /* ---------- Ansatztabelle (Editor unter der Zeichenfläche) ---------- */
 
+.st-linked {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent);
+  white-space: nowrap;
+}
+
 .stoich-editor {
   flex-shrink: 0;
   max-height: 44vh;
