@@ -3,8 +3,26 @@
 // Prüft genau den Code der App (electron/clipboard.mjs) – Electron hat die Zwischenablage schon einmal umgebaut.
 // Aufruf: npx electron electron/test-clipboard.mjs   (überschreibt kurz die Zwischenablage, Text wird zurückgelegt)
 import { app, clipboard } from 'electron'
+import { execFileSync } from 'node:child_process'
 import zlib from 'node:zlib'
 import { findPayload, lastWriteMode, scanClipboard, validPayload, writePng } from './clipboard.mjs'
+
+/**
+ * Windows: Electron zeigt das rohe Format „PNG“ in clipboard.read() nicht an (nur als image/png, und das hat Chromium
+ * neu codiert) – deshalb das Format mit Windows-Mitteln (PowerShell) lesen: Rückgabe = darin gefundene Nutzlast.
+ */
+function nativePngPayload() {
+  const ps = [
+    'Add-Type -AssemblyName System.Windows.Forms',
+    '$d = [Windows.Forms.Clipboard]::GetDataObject()',
+    "if ($d -and $d.GetDataPresent('PNG')) { $o = $d.GetData('PNG'); $ms = New-Object IO.MemoryStream; $o.CopyTo($ms); [Text.Encoding]::GetEncoding(28591).GetString($ms.ToArray()) }",
+  ].join('; ')
+  try {
+    return findPayload(Buffer.from(execFileSync('powershell.exe', ['-NoProfile', '-STA', '-Command', ps], { encoding: 'latin1', maxBuffer: 64e6 }), 'latin1'))
+  } catch {
+    return null
+  }
+}
 
 const fails = []
 const check = (name, ok) => {
@@ -79,10 +97,8 @@ app.whenReady().then(async () => {
       await writePng(pngWithText(payload + '.'))
       const types = (await clipboard.read()).flatMap((i) => i.types)
       console.log('       Weg:', lastWriteMode, '| Formate:', types.join(', '))
-      check('Zwischenablage: geschrieben und wiedergefunden (Windows, Format „PNG“)', (await scanClipboard()) === payload)
-      // Rückfallweg ohne normales Bild: Office geht, andere Programme sehen evtl. nichts – melden, kein Fehler
-      if (lastWriteMode !== 'win-both') console.log('HINWEIS Normales Bild und Daten gingen nicht zusammen – nur das Format „PNG“ (Paint & Co. sehen evtl. kein Bild)')
-      else check('Zwischenablage: normales Bild für andere Programme vorhanden', types.includes('image/png'))
+      check('Zwischenablage: Daten im Format „PNG“ geschrieben (Windows, mit Windows-Mitteln gelesen)', nativePngPayload() === payload)
+      check('Zwischenablage: Schreibweg ist das rohe Format „PNG“', lastWriteMode === 'win-raw-only')
     } else console.log('–      Zwischenablage-Test nur auf Mac und Windows')
   } catch (e) {
     check('Test lief ohne Fehler: ' + e.message, false)

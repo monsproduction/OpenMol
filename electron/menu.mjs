@@ -62,6 +62,9 @@ const L = {
     theme: 'Hell / Dunkel',
     fullscreen: 'Vollbild',
     window: 'Fenster',
+    minimize: 'Minimieren',
+    maximize: 'Maximieren',
+    quit: 'Beenden',
     help: 'Hilfe',
     shortcuts: 'Tastenkürzel',
     settingsDir: 'Einstellungsordner zeigen',
@@ -125,6 +128,9 @@ const L = {
     theme: 'Light / Dark',
     fullscreen: 'Full Screen',
     window: 'Window',
+    minimize: 'Minimize',
+    maximize: 'Maximize',
+    quit: 'Exit',
     help: 'Help',
     shortcuts: 'Keyboard Shortcuts',
     settingsDir: 'Show Settings Folder',
@@ -188,7 +194,7 @@ export function buildMenu(getWin, actions = {}) {
         },
         // Word-Add-in: Mac und Windows (unter Linux gibt es kein Word)
         ...(mac || process.platform === 'win32' ? [{ type: 'separator' }, { label: t.wordAddin, click: () => actions.wordAddin?.() }] : []),
-        ...(mac ? [] : [{ type: 'separator' }, item(t.settings, 'settings', 'CmdOrCtrl+,'), { role: 'quit' }]),
+        ...(mac ? [] : [{ type: 'separator' }, item(t.settings, 'settings', 'CmdOrCtrl+,'), { role: 'quit', label: t.quit }]),
       ],
     },
     {
@@ -244,7 +250,26 @@ export function buildMenu(getWin, actions = {}) {
         { role: 'togglefullscreen', label: t.fullscreen },
       ],
     },
-    { role: 'windowMenu', label: t.window },
+    // Windows/Linux: das Standard-Fenstermenü wäre englisch („Minimize / Zoom / Close“) → eigene Beschriftungen
+    mac
+      ? { role: 'windowMenu', label: t.window }
+      : {
+          label: t.window,
+          submenu: [
+            { role: 'minimize', label: t.minimize },
+            {
+              label: t.maximize,
+              click: () => {
+                const w = getWin()
+                if (!w) return
+                if (w.isMaximized()) w.unmaximize()
+                else w.maximize()
+              },
+            },
+            { type: 'separator' },
+            { role: 'close', label: t.close },
+          ],
+        },
     {
       role: 'help',
       label: t.help,
