@@ -1,9 +1,9 @@
 # OpenMol unter Windows
 
-Stand: 2026-10-25 (OpenMol 1.3.2). Die Windows-Version wird auf dem Mac gebaut und ist dort geprüft, soweit das ohne
-Windows geht – **auf Windows selbst getestet ist sie noch nicht.** Neu in 1.3.2 und besonders zu prüfen: der
-Austausch mit Word (Abschnitt C). Der Windows-Installer liegt diesmal **nicht** auf GitHub – bitte selbst bauen
-(Abschnitt B).
+Stand: 2026-10-26 (OpenMol 1.3.2). **Auf Windows 11 (x64, deutsche Tastatur, Microsoft 365) gebaut und getestet** – der
+Austausch mit Word (Abschnitt C) eingeschlossen. Der Windows-Installer `OpenMol-Setup-1.3.2.exe` hängt am Release auf
+GitHub; selbst bauen geht wie in Abschnitt B. Was unter Windows geprüft wurde und was nicht, steht in den Abschnitten C
+und „Allgemeine Test-Checkliste“.
 
 ## A) Installieren
 
@@ -35,9 +35,11 @@ Einstellungen und Daten liegen in `%APPDATA%\OpenMol\` (`settings.json`, `librar
    npm run test:clipboard
    ```
 
-   Erwartet: alle Zeilen `OK` und am Ende „Zwischenablage-Test bestanden“. Die Zeile „Weg: …“ zeigt, wie geschrieben
-   wurde: `win-both` = Bild für alle Programme **und** Daten für Office (bestes Ergebnis); `win-raw-only` = nur das
-   Office-Format „PNG“ (Word geht, Paint & Co. sehen evtl. kein Bild). Die ganze Ausgabe bitte aufheben.
+   Erwartet: alle Zeilen `OK` und am Ende „Zwischenablage-Test bestanden“. Die Zeile „Weg: win-raw-only“ ist unter
+   Windows der einzige Schreibweg: Gemeinsam mit einem normalen Bild (`image/png`) setzt sich unter Windows das von
+   Chromium neu codierte PNG durch und die OpenMol-Daten gehen verloren; das rohe Office-Format „PNG“ behält sie (Word
+   übernimmt es, Paint zeigt das Bild – 2026-10-26 gemessen). Electron zeigt dieses Format in `clipboard.read()` nicht
+   an, deshalb liest der Test es mit PowerShell zurück.
 4. Installer bauen:
 
    ```
@@ -48,7 +50,7 @@ Einstellungen und Daten liegen in `%APPDATA%\OpenMol\` (`settings.json`, `librar
 5. Zum Entwickeln mit Live-Neuladen: `npm run app` (Desktop-App) bzw. `npm run dev` (im Browser,
    <http://localhost:5173>).
 
-## C) Austausch mit Word (neu, ungetestet)
+## C) Austausch mit Word (getestet 2026-10-26)
 
 **Was eingebaut ist:**
 
@@ -71,24 +73,28 @@ wahrscheinlich nicht laufen.
 
 ### Test-Schritte
 
-1. [ ] `npm run test:clipboard` (siehe B.3) – Ergebnis notieren.
-2. [ ] OpenMol starten, etwas zeichnen, markieren, **Strg+C**, in Word **Strg+V** → Bild erscheint.
-3. [ ] Das Bild in Word anklicken, **Strg+C**, in OpenMol **Strg+V** → kommt als **bearbeitbare Struktur** zurück
+Stand 2026-10-26: Schritte 1–8 bestanden (Windows 11, Word aus Microsoft 365 16.0.20131); 9 und 10 nicht einzeln geprüft.
+Schritt 2 und 3 wurden mit Word über die Automatisierung (COM) statt mit Tastendrücken geprüft.
+
+1. [x] `npm run test:clipboard` (siehe B.3) – Ergebnis notieren.
+2. [x] OpenMol starten, etwas zeichnen, markieren, **Strg+C**, in Word **Strg+V** → Bild erscheint.
+3. [x] Das Bild in Word anklicken, **Strg+C**, in OpenMol **Strg+V** → kommt als **bearbeitbare Struktur** zurück
        (Meldung „Als bearbeitbare Struktur eingefügt“). Wenn nur ein Bild bzw. nichts eingefügt wird: Word hat die
        Daten verloren – bitte notieren.
-4. [ ] Strg+C in OpenMol, dann in Paint (oder Teams/Outlook) Strg+V → Bild erscheint (prüft das normale Bild für andere
+4. [x] Strg+C in OpenMol, dann in Paint (oder Teams/Outlook) Strg+V → Bild erscheint (prüft das normale Bild für andere
        Programme).
-5. [ ] OpenMol: **Datei ▸ Word-Add-in einrichten …** → Dialog „Windows muss dem OpenMol-Zertifikat einmal vertrauen“ →
+5. [x] OpenMol: **Datei ▸ Word-Add-in einrichten …** → Dialog „Windows muss dem OpenMol-Zertifikat einmal vertrauen“ →
        **„Vertrauen …“** → Windows-Sicherheitswarnung mit **„Ja“** bestätigen → Meldung „Fertig – das Word-Add-in ist
        eingerichtet.“
-6. [ ] Word ganz beenden und neu starten. Im Reiter **Start** erscheint rechts die Gruppe „OpenMol“ mit
-       **„In OpenMol bearbeiten“**. Falls nicht: Reiter **Einfügen** ▸ „Add-Ins abrufen“ bzw. „Meine Add-Ins“ ▸
-       Registerkarte/Bereich **„Entwickler-Add-Ins“** ▸ „OpenMol“. (Wo genau Word Entwickler-Add-ins anzeigt, ist unter
-       Windows ungeprüft.)
-7. [ ] In Word das OpenMol-Bild anklicken → „In OpenMol bearbeiten“ → Seitenleiste zeigt „Verbunden mit OpenMol 1.3.2“
+6. [x] Word ganz beenden und neu starten. Im Reiter **Start** erscheint rechts die Gruppe „OpenMol“ mit
+       **„In OpenMol bearbeiten“**. Word muss dafür **normal** gestartet sein (Startmenü, Doppelklick auf eine
+       Word-Datei): Eine per Skript/Automatisierung gestartete Instanz (`WINWORD.EXE /Automation -Embedding`) lädt das
+       Add-in nicht. Falls die Gruppe trotzdem fehlt: Reiter **Einfügen** ▸ „Add-Ins abrufen“ bzw. „Meine Add-Ins“ ▸
+       Registerkarte/Bereich **„Entwickler-Add-Ins“** ▸ „OpenMol“.
+7. [x] In Word das OpenMol-Bild anklicken → „In OpenMol bearbeiten“ → Seitenleiste zeigt „Verbunden mit OpenMol 1.3.2“
        → OpenMol kommt nach vorn mit Tab „Aus Word“. (Kommt das Fenster nicht nach vorn, sondern blinkt nur in der
        Taskleiste: bitte notieren.)
-8. [ ] In OpenMol etwas ändern → oben **„Zurück nach Word“** → in Word wird das Bild ersetzt, Größe bleibt gleich.
+8. [x] In OpenMol etwas ändern → oben **„Zurück nach Word“** → in Word wird das Bild ersetzt, Größe bleibt gleich.
 9. [ ] Dasselbe Bild **ein zweites Mal** bearbeiten (Schritt 7–8) – klappt auch das?
 10. [ ] Word-Datei speichern, schließen, wieder öffnen → Bild noch einmal bearbeiten.
 
@@ -122,8 +128,8 @@ Projektordner in Claude Code öffnen und z. B. einfügen:
 
 > Das ist OpenMol (ChemDraw-Nachbau, Electron-App). Auf dem Mac funktioniert der Austausch mit Word: Strg/⌘+C legt
 > ein PNG mit den Zeichnungsdaten (tEXt-Block „openmol“, „OM1:…“) ab, und ein Word-Add-in (electron/wordAddin.mjs,
-> electron/addin/) öffnet markierte Bilder in OpenMol und ersetzt sie danach. Die Windows-Teile sind eingebaut, aber
-> ungetestet: electron/clipboard.mjs (writePng: Rohformat „PNG“ plus image/png, mit Rücklese-Prüfung),
+> electron/addin/) öffnet markierte Bilder in OpenMol und ersetzt sie danach. Die Windows-Teile sind eingebaut und
+> seit 2026-10-26 getestet (zum Nachschlagen): electron/clipboard.mjs (writePng: Rohformat „PNG“),
 > electron/selfsignedCert.mjs (Zertifikat ohne openssl), electron/wordAddin.mjs (certutil, Registry WEF\Developer,
 > PowerShell Test-Path). Bitte gehe mit mir die Test-Schritte in WINDOWS.md Abschnitt C durch, führe
 > `npm run test:clipboard` aus und behebe, was unter Windows nicht klappt. Sicherheitseinstellungen (Zertifikat
@@ -131,18 +137,26 @@ Projektordner in Claude Code öffnen und z. B. einfügen:
 
 ## Allgemeine Test-Checkliste
 
+Stand 2026-10-26: Mit der gepackten App 1.3.2 (`win-unpacked`) auf Windows 11 geprüft und mit [x] markiert sind:
+Menüleiste, Speichern (Strg+S) mit „*“ im Titel, Schließen mit Nachfrage. Zusätzlich bestanden: Strg+C/Strg+V, Speichern unter,
+Export-Dialog, zweiter Start mit Dateiargument bei laufender App (öffnet als Tab; der echte Mausklick im Explorer ist
+nicht getestet), Name/CAS → Struktur (`50-78-2`, `ibuprofen`), Strg+Plus, deutsche Fenster-Menüs und die KI-Steuerung über
+`OpenMol.exe` (Schritte `get_document`, `insert_structure`, `get_image`, `undo`). Die übrigen Punkte stammen vom Durchgang mit
+OpenMol 1.0.0 (2026-10-22, bestanden) und wurden für 1.3.2 nicht wiederholt; der 1.3.2-Installer selbst wurde nicht
+installiert/deinstalliert.
+
 - [ ] Installieren, Starten, Fenster und Symbol (Taskleiste, Startmenü, Desktop) sehen richtig aus
-- [ ] Menüleiste im Fenster: Datei, Bearbeiten, Struktur, Darstellung, Fenster, Hilfe; Kürzel werden als „Strg+…“ angezeigt
+- [x] Menüleiste im Fenster: Datei, Bearbeiten, Struktur, Darstellung, Fenster, Hilfe; Kürzel werden als „Strg+…“ angezeigt
 - [ ] Hinweise/Tooltips in der App zeigen „Strg“/„Umschalt“ statt ⌘/⇧ (z. B. „Speichern (Strg+S)“)
 - [ ] Zeichnen, Kopieren/Einfügen (Strg+C/V), Rückgängig (Strg+Z), Duplizieren (Strg+D)
 - [ ] Strg+Umschalt+K (Struktur aufräumen), Strg+Umschalt+X (Reaktion aufräumen), Strg+Umschalt+D (2D ↔ 3D)
 - [ ] Strg+Alt+Umschalt+F/B (Ebene vor/zurück) – auf deutschen Tastaturen kann Strg+Alt wie AltGr wirken; bitte prüfen
-- [ ] Speichern (Strg+S): beim ersten Mal Dialog, danach ohne Dialog in dieselbe Datei; Fenstertitel zeigt „*“ bei
+- [x] Speichern (Strg+S): beim ersten Mal Dialog, danach ohne Dialog in dieselbe Datei; Fenstertitel zeigt „*“ bei
       ungesicherten Änderungen
 - [ ] Speichern unter (Strg+Umschalt+S), Öffnen (Strg+O), Exportieren (PNG, SVG, Molfile, CDXML)
 - [ ] Doppelklick auf eine `.openmol`-Datei im Explorer öffnet OpenMol (auch wenn OpenMol schon läuft)
 - [ ] Datei ins Fenster ziehen öffnet sie (auch `.cdxml` aus ChemDraw)
-- [ ] Schließen mit ungesicherten Änderungen fragt „Sichern / Nicht sichern / Abbrechen“
+- [x] Schließen mit ungesicherten Änderungen fragt „Sichern / Nicht sichern / Abbrechen“
 - [ ] Einstellungen (Sprache, Inspektor-Reihenfolge …) bleiben nach Neustart erhalten
 - [ ] Name/CAS → Struktur (z. B. `50-78-2`), PubChem-Suche, 3D (Strg+Umschalt+D) funktionieren (Internet nötig)
 - [ ] KI-Steuerung: Einstellungen → „Prompt für die KI kopieren“ → in eine KI-Anwendung (z. B. Claude Desktop) einfügen,
@@ -160,8 +174,11 @@ die Pfade dieses Rechners (Programm = `OpenMol.exe`, Server = `…\resources\mcp
 `ELECTRON_RUN_AS_NODE=1`).
 
 Claude Desktop liest seine Einstellungen unter Windows aus `%APPDATA%\Claude\claude_desktop_config.json`
-(Pfad laut Claude-Dokumentation, unter Windows noch nicht geprüft). Auf dem Mac ist dieser Weg mit der fertigen App
-getestet, **unter Windows noch nicht** – siehe Checkliste.
+(Pfad laut Claude-Dokumentation; die Claude-Desktop-Datei selbst wurde nicht geändert/geprüft – bei der
+Microsoft-Store-Version kann der Ort abweichen, am besten über *Einstellungen → Entwickler → Konfiguration bearbeiten*
+öffnen). Mit der gepackten App ist der Weg unter Windows getestet (2026-10-26): Der erzeugte Eintrag (`OpenMol.exe` +
+`resources\mcp\server.mjs`, `ELECTRON_RUN_AS_NODE=1`) startete den Server, und `get_document`, `insert_structure`,
+`get_image`, `undo` liefen gegen die App; das Verbinden dauert bis zu etwa 10 Sekunden.
 
 ## Bekannte offene Punkte
 
