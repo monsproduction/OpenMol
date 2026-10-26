@@ -350,6 +350,15 @@ const ICONS: Record<string, ReactElement> = {
   help: <path {...S} d="M10 17.5a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15zM7.7 7.6a2.4 2.4 0 0 1 4.6.8c0 1.6-2.3 2.2-2.3 2.2M10 13.8h.01" />,
   copy: <path {...S} d="M7 7V4.2A1.2 1.2 0 0 1 8.2 3h7.6A1.2 1.2 0 0 1 17 4.2v7.6a1.2 1.2 0 0 1-1.2 1.2H13M4.2 7h7.6A1.2 1.2 0 0 1 13 8.2v7.6a1.2 1.2 0 0 1-1.2 1.2H4.2A1.2 1.2 0 0 1 3 15.8V8.2A1.2 1.2 0 0 1 4.2 7z" />,
   // Anordnung: gefülltes Quadrat = ausgewähltes Objekt
+  atomnum: (
+    <g>
+      <circle cx="6.5" cy="13.5" r="2.2" fill="none" stroke="currentColor" strokeWidth={1.5} />
+      <text x="10.5" y="9.5" fontSize="8.5" fontWeight="700" fill="currentColor" fontFamily="Arial, sans-serif">
+        1
+      </text>
+      <path d="M8.2 12l2.6-1.6" {...S} />
+    </g>
+  ),
   group: (
     <g {...S}>
       <rect x="2.5" y="2.5" width="15" height="15" rx="1.5" strokeDasharray="2.4 1.8" />

@@ -155,7 +155,7 @@ type Drag =
   | { mode: 'cyc-box'; id: Id; fixed: Pt; rx0: number; ry0: number; off: Pt }
   | { mode: 'erase'; hits: Hover[] }
   | { mode: 'click'; start: Pt; h: Hover }
-  | { mode: 'decor'; atom: Id; which: 'charge' | 'partial' | 'stereo' | 'lp' | 'rad'; index: number; grab: Pt }
+  | { mode: 'decor'; atom: Id; which: 'charge' | 'partial' | 'stereo' | 'lp' | 'rad' | 'num'; index: number; grab: Pt }
   | { mode: 'cycle-draw'; start: Pt; draw: boolean; h: Hover }
   | { mode: 'cyc-from'; id: Id; angle: number; start: Pt; h: Hover }
   | { mode: 'cyc-lm' | 'cyc-le'; id: Id; lid: Id }
@@ -616,6 +616,7 @@ export function Canvas() {
             const a = doc.atoms[dh.atom]
             if (dh.which === 'charge') a.chargeOff = undefined
             else if (dh.which === 'stereo') a.stereoOff = undefined
+            else if (dh.which === 'num') a.numOff = undefined
             else if (dh.which === 'lp' || dh.which === 'rad') {
               const arr = dh.which === 'lp' ? a.lpOff : a.radOff
               if (arr) arr[dh.index] = null
@@ -840,6 +841,7 @@ export function Canvas() {
           const off = { x: p.x + d.grab.x - a.x, y: p.y + d.grab.y - a.y }
           if (d.which === 'charge') a.chargeOff = off
           else if (d.which === 'stereo') a.stereoOff = off
+          else if (d.which === 'num') a.numOff = off
           else if (d.which === 'lp' || d.which === 'rad') {
             // jedes Elektronenpaar / jeder Radikalpunkt einzeln; Abstand mindestens knapp außerhalb des Atoms
             const l = Math.hypot(off.x, off.y)
@@ -1562,6 +1564,33 @@ export function Canvas() {
         rememberFill(style)
         return
       }
+      case 'number': {
+        // Nummerieren: Klick = nächste Nummer, ⌥+Klick = Nummer entfernen, ⇧+Klick = ab dieser Nummer weiterzählen
+        const h = hit(p, { only: ['atom'] })
+        if (h?.kind !== 'atom') return
+        const a = st.doc.atoms[h.id]
+        if (e.shiftKey && a.num) {
+          const n = parseInt(a.num, 10)
+          if (n > 0) setState({ opts: { ...st.opts, numNext: n + 1 } })
+          return
+        }
+        if (e.altKey) {
+          commit((doc) => {
+            delete doc.atoms[h.id].num
+            delete doc.atoms[h.id].numOff
+          })
+          return
+        }
+        const text = String(st.opts.numNext) + st.opts.numMark
+        commit((doc) => {
+          // dieselbe Nummer im selben Molekül nicht doppelt
+          for (const id of fragmentSel(doc, h.id).atoms) if (id !== h.id && doc.atoms[id].num === text) delete doc.atoms[id].num
+          doc.atoms[h.id].num = text
+          delete doc.atoms[h.id].numOff
+        })
+        setState({ opts: { ...getState().opts, numNext: st.opts.numNext + 1 } })
+        return
+      }
       case 'plus': {
         const id = uid('t')
         const size = Math.round(fs * 1.3)
@@ -1766,6 +1795,8 @@ export function Canvas() {
           ? dd?.charge
           : hover.which === 'stereo'
             ? dd?.stereo?.c
+            : hover.which === 'num'
+              ? dd?.num?.c
             : hover.which === 'lp'
               ? dd?.lonePairs[hover.index ?? 0]?.c
               : hover.which === 'rad'
@@ -2268,11 +2299,12 @@ function cycleLabelAt(doc: Doc, p: Pt, tol: number): { kind: 'station' | 'branch
 }
 
 /** Ladung oder Partialladung unter dem Zeiger */
-function decorHit(scene: Scene, p: Pt, tol: number): { atom: Id; which: 'charge' | 'partial' | 'stereo' | 'lp' | 'rad'; index: number; pos: Pt } | null {
+function decorHit(scene: Scene, p: Pt, tol: number): { atom: Id; which: 'charge' | 'partial' | 'stereo' | 'lp' | 'rad' | 'num'; index: number; pos: Pt } | null {
   for (const [id, d] of scene.decor) {
     if (d.charge && dist(d.charge, p) < tol) return { atom: id, which: 'charge', index: 0, pos: d.charge }
     if (d.partial && dist(d.partial, p) < tol) return { atom: id, which: 'partial', index: 0, pos: d.partial }
     if (d.stereo && dist(d.stereo.c, p) < tol * (d.stereo.cip ? 1.4 : 1)) return { atom: id, which: 'stereo', index: 0, pos: d.stereo.c }
+    if (d.num && dist(d.num.c, p) < tol * 0.9) return { atom: id, which: 'num', index: 0, pos: d.num.c }
     for (let i = 0; i < d.lonePairs.length; i++) if (dist(d.lonePairs[i].c, p) < tol * 0.9) return { atom: id, which: 'lp', index: i, pos: d.lonePairs[i].c }
     for (let i = 0; i < d.radicals.length; i++) if (dist(d.radicals[i].c, p) < tol * 0.8) return { atom: id, which: 'rad', index: i, pos: d.radicals[i].c }
   }

@@ -13,6 +13,8 @@ export interface AtomDecor {
   partial: Pt | null
   /** Stereo-Markierung: „*“ und/oder (R)/(S) */
   stereo: { c: Pt; star: boolean; cip: 'R' | 'S' | null } | null
+  /** Atomnummer (NMR-Zuordnung) */
+  num: { c: Pt; text: string } | null
   /** Radius, ab dem Bindungen gekürzt werden (für Atome ohne Label 0) */
   shown: boolean
 }
@@ -123,5 +125,13 @@ export function atomDecor(g: Graph, a: Atom, style: DocStyle, cip?: 'R' | 'S' | 
     }
     stereo = { c, star: !!a.stereoMark, cip: showCip }
   }
-  return { label, charge, lonePairs, radicals, partial, stereo, shown }
+  let num: AtomDecor['num'] = null
+  if (a.num) {
+    // freie Richtung (bei Ringatomen nach außen), bevorzugt links unten – rechts oben sitzen Ladung und Stereo
+    const ang = a.numOff ? 0 : pick((Math.PI * 3) / 4)
+    const w = style.fontSize * 0.3 * Math.max(0, a.num.length - 1) * Math.abs(Math.cos(ang))
+    const c = a.numOff ? add(a, a.numOff) : add(a, fromAngle(ang, (label ? decorRadius(label, ang, style) : style.fontSize * 0.3) + style.fontSize * 0.22 + w))
+    num = { c, text: a.num }
+  }
+  return { label, charge, lonePairs, radicals, partial, stereo, num, shown }
 }

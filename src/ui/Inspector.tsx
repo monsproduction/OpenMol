@@ -431,6 +431,22 @@ export function Inspector() {
             </label>
           </Row>
           {atoms.length === 1 && <CipInfo id={atoms[0].id} />}
+          {atoms.length === 1 && (
+            <Row label="Atomnummer">
+              <LazyText
+                value={atoms[0].num ?? ''}
+                placeholder="–"
+                onCommit={(v) => {
+                  // freie Bezeichnung für NMR-Zuordnungen: „1“, „4a“, „2′“ (' wird zu ′)
+                  const t = v.trim().replace(/''/g, '″').replace(/'/g, '′').slice(0, 8)
+                  setAtoms((a) => {
+                    a.num = t || undefined
+                    if (!t) delete a.numOff
+                  })
+                }}
+              />
+            </Row>
+          )}
           <Row label="Isotop (Masse)">
             <LazyText
               value={atoms[0].isotope ? String(atoms[0].isotope) : ''}

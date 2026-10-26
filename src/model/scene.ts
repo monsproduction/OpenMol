@@ -489,6 +489,8 @@ export function sceneBBox(scene: Scene, only?: Partial<Record<keyof Doc, Set<Id>
       x2: a.x + (l ? l.right : 2) + (a.charge ? fs * 0.6 : 0) + (d?.lonePairs.length ? fs * 0.4 : 0),
       y2: a.y + (l ? l.bottom : 2) + (d?.lonePairs.length ? fs * 0.45 : 0),
     })
+    // Atomnummer (und Stereo-Markierung) gehören zum Bild – sonst schneidet der Export sie ab
+    for (const c of [d?.num?.c, d?.stereo?.c]) if (c) box = unionBox(box, { x1: c.x - fs * 0.45, y1: c.y - fs * 0.4, x2: c.x + fs * 0.45, y2: c.y + fs * 0.4 })
   }
   for (const id in doc.bonds) {
     if (!want('bonds', id)) continue

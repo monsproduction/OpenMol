@@ -28,6 +28,7 @@ export type ToolId =
   | 'shape'
   | 'template'
   | 'ringfill'
+  | 'number'
   | 'rotate3d'
   | 'cycle'
   | 'pan'
@@ -41,7 +42,7 @@ export type Hover =
   | { kind: 'text'; id: Id }
   | { kind: 'shape'; id: Id }
   | { kind: 'fill'; id: Id }
-  | { kind: 'decor'; id: Id; which: 'charge' | 'partial' | 'stereo' | 'lp' | 'rad'; index?: number }
+  | { kind: 'decor'; id: Id; which: 'charge' | 'partial' | 'stereo' | 'lp' | 'rad' | 'num'; index?: number }
   | { kind: 'cycle'; id: Id }
   | { kind: 'table'; id: Id }
   | null
@@ -74,6 +75,9 @@ export interface ToolOpts {
   cycleMode: 'draw' | 'station' | 'in' | 'out' | 'pair' | 'second'
   cycleStations: number
   cycleDir: 'cw' | 'ccw'
+  /** Nummerieren-Werkzeug: nächste Nummer und Strich (′, ″) für ein zweites Ringsystem */
+  numNext: number
+  numMark: '' | '′' | '″'
 }
 
 export interface Editing {
@@ -217,6 +221,8 @@ let state: State = {
     cycleMode: 'draw',
     cycleStations: 4,
     cycleDir: 'cw',
+    numNext: 1,
+    numMark: '',
   },
   past: [],
   future: [],

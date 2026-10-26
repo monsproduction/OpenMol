@@ -3,7 +3,7 @@ import { QUICK_GROUPS } from '../model/abbrev'
 import type { ArrowKind, ArrowRoute, BondType, ShapeKind } from '../model/types'
 import { selectionSize } from '../model/types'
 import { setState, setTool, useStore, type ToolId } from '../store'
-import { alignSelection, clean3D, cleanStructure, flatten3D, flip, numberCompounds, rotate, rotate3D, skew, tilt } from '../tools/actions'
+import { alignSelection, autoNumberAtoms, clean3D, cleanStructure, clearAtomNumbers, flatten3D, flip, numberCompounds, rotate, rotate3D, skew, tilt } from '../tools/actions'
 import { cleanReaction } from '../tools/cleanup'
 import { FillOptions } from './FillOptions'
 import { Icon } from './Icons'
@@ -133,6 +133,7 @@ const RAIL: (RailItem | 'sep')[] = [
   { tools: ['shape'], icon: (s) => SHAPES.find((x) => x.k === s.opts.shapeKind)?.icon ?? 'brackets', title: 'Klammern & Formen' },
   { tools: ['cycle'], icon: 'cycle', title: 'Katalysezyklus (Kreislauf mit Stationen, Zu- und Abflüssen)' },
   { tools: ['ringfill'], icon: 'ringfill', title: 'Ringfüllung & Farbverlauf' },
+  { tools: ['number'], icon: 'atomnum', title: 'Atome nummerieren (NMR-Zuordnung)' },
   'sep',
   { tools: ['template'], icon: 'template', title: 'Vorlagen-Bibliothek' },
 ]
@@ -445,6 +446,33 @@ export function OptionsBar() {
       hint = opts.fillErase
         ? 'Klick auf einen gefüllten Ring entfernt die Füllung'
         : 'Klick = füllen (erneuter Klick auf denselben Ring entfernt) · ⇧+Klick oder Doppelklick = ganzes System mit einem Verlauf'
+      break
+    case 'number':
+      content = (
+        <>
+          <span className="opt-label">Nächste</span>
+          <input
+            className="opt-num"
+            type="number"
+            min={1}
+            max={999}
+            value={opts.numNext}
+            data-tip="Nummer, die der nächste Klick vergibt"
+            onKeyDown={(e) => e.stopPropagation()}
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10)
+              if (n >= 1 && n <= 999) setTool('number', { numNext: n })
+            }}
+          />
+          <OptBtn label="1" title="Ohne Strich (Stammsystem)" active={opts.numMark === ''} onClick={() => setTool('number', { numMark: '' })} />
+          <OptBtn label="1′" title="Mit Strich (zweites Ringsystem bzw. Substituent)" active={opts.numMark === '′'} onClick={() => setTool('number', { numMark: '′' })} />
+          <OptBtn label="1″" title="Mit Doppelstrich (drittes Ringsystem)" active={opts.numMark === '″'} onClick={() => setTool('number', { numMark: '″' })} />
+          <div className="opt-sep" />
+          <OptBtn label="Automatisch" title="Markierte Moleküle (sonst alle) nach vereinfachten IUPAC-Regeln nummerieren – Vorschlag, bitte prüfen" onClick={autoNumberAtoms} />
+          <OptBtn icon="eraser" label="Alle entfernen" title="Atomnummern der Markierung (sonst aller Atome) entfernen" onClick={clearAtomNumbers} />
+        </>
+      )
+      hint = 'Klick auf ein Atom = nächste Nummer · ⌥+Klick = Nummer entfernen · ⇧+Klick = ab dieser Nummer weiterzählen · Nummern lassen sich mit dem Auswahlwerkzeug verschieben'
       break
     case 'rotate3d':
       content = (

@@ -1,4 +1,5 @@
 // Befehle, die von Menüs, Tastenkürzeln und der Zeichenfläche gemeinsam genutzt werden.
+import { autoNumber } from '../model/numbering'
 import { countObjects, hasLocked, inGroup, lockItems, makeGroup, removeGroups, unlockAll, withoutLocked } from '../model/groups'
 import { linkTable } from '../model/reactionLink'
 import { isotopePattern } from '../model/isotopePattern'
@@ -52,6 +53,44 @@ export function selectAll() {
       cycles: Object.keys(d.cycles ?? {}),
       tables: Object.keys(d.tables ?? {}),
     }),
+  })
+}
+
+// ---------- Atomnummerierung (NMR-Zuordnung) ----------
+
+/** Moleküle der Auswahl (sonst alle) nach vereinfachten IUPAC-Regeln nummerieren; vorhandene Nummern dort ersetzen */
+export function autoNumberAtoms() {
+  const { doc, sel } = getState()
+  const ids = selectionSize(sel) ? [...selectionAtomIds(doc, completeSel(doc, sel))] : Object.keys(doc.atoms)
+  if (!ids.length) return toast('Erst eine Struktur zeichnen oder markieren')
+  const { nums, fallback } = autoNumber(doc, ids)
+  const frag = new Set(fragments(doc, getScene(doc).g, ids).flat())
+  commit((d) => {
+    for (const id of frag) {
+      const a = d.atoms[id]
+      if (!a) continue
+      a.num = nums.get(id)
+      delete a.numOff
+    }
+  })
+  toast(
+    fallback
+      ? 'Nummeriert – für ein Ringsystem gab es keine Regel (fortlaufend nummeriert): bitte mit dem Werkzeug „Nummerieren“ korrigieren'
+      : 'Nach vereinfachten IUPAC-Regeln nummeriert – bitte prüfen; korrigieren mit dem Werkzeug „Nummerieren“',
+  )
+}
+
+/** Nummern der Auswahl (sonst aller Atome) entfernen */
+export function clearAtomNumbers() {
+  const { doc, sel } = getState()
+  const ids = selectionSize(sel) ? [...selectionAtomIds(doc, sel)] : Object.keys(doc.atoms)
+  if (!ids.some((id) => doc.atoms[id]?.num)) return toast('Keine Atomnummern vorhanden')
+  commit((d) => {
+    for (const id of ids)
+      if (d.atoms[id]) {
+        delete d.atoms[id].num
+        delete d.atoms[id].numOff
+      }
   })
 }
 

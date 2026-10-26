@@ -47,6 +47,10 @@ export interface Atom {
   showCip?: boolean
   /** manuell verschobene Stereo-Markierung (Versatz zum Atom) */
   stereoOff?: { x: number; y: number }
+  /** Atomnummer für NMR-Zuordnungen („1“, „4a“, „2′“), klein neben dem Atom */
+  num?: string
+  /** manuell verschobene Atomnummer (Versatz zum Atom) */
+  numOff?: { x: number; y: number }
   /** Tiefe für 3D-Darstellung (positiv = zum Betrachter) */
   z?: number
   /** ursprüngliche 2D-Lage vor dem ersten 3D-Schritt (für „Zurück zu 2D“) */

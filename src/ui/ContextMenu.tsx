@@ -8,7 +8,9 @@ import { chemLabel } from '../model/richtext'
 import { clipboard, getState, setState, useStore } from '../store'
 import {
   arrange,
+  autoNumberAtoms,
   cleanStructure,
+  clearAtomNumbers,
   contractGroups,
   createStoichTable,
   copySelection,
@@ -145,6 +147,9 @@ function entries(at: { x: number; y: number }, pick: boolean): Entry[] {
               { label: 'Exakte Masse', action: mol(() => insertAnalysis(['exact'])) },
               { label: 'Molekulargewicht', action: mol(() => insertAnalysis(['mw'])) },
               { label: 'Isotopenmuster', action: mol(() => insertAnalysis(['isotopes'])) },
+              'sep',
+              { label: 'Atome nummerieren', tip: 'Nach vereinfachten IUPAC-Regeln (für NMR-Zuordnungen) – Vorschlag, bitte prüfen', action: mol(autoNumberAtoms) },
+              { label: 'Atomnummern entfernen', action: mol(clearAtomNumbers) },
               { label: 'Alle vier', action: mol(() => insertAnalysis(['name', 'formula', 'exact', 'mw'])) },
             ],
           },

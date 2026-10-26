@@ -763,6 +763,8 @@ const SHORTCUTS: [string, string][] = [
   ['Bild aus Word/PowerPoint', 'Von OpenMol kopierte Bilder tragen die Zeichnung in sich: dort kopieren, in OpenMol einfügen – wieder bearbeitbar (Desktop-App; unter Windows noch ungetestet)'],
   ['⌘/Strg + D', 'Duplizieren'],
   ['⌘/Strg + P', 'Drucken (Seitenlayout wie beim PDF)'],
+  ['⌘/Strg + G / ⇧⌘G', 'Gruppieren / Gruppierung aufheben'],
+  ['⌘/Strg + L / ⇧⌘L', 'Sperren / Alle entsperren'],
   ['⌘/Strg + B / I', 'Ausgewählte Atome/Texte fett / kursiv'],
   ['⌘/Strg + A', 'Alles auswählen'],
   ['Klick auf Atom/Bindung', 'Nur dieses Atom bzw. diese Bindung markieren'],

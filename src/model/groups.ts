@@ -23,7 +23,12 @@ function wholeMolecules(d: Doc, items: ObjLists): Selection {
     }
     const seen = new Set(start)
     const st = [...start]
-    while (st.length) for (const v of adj.get(st.pop()!) ?? []) if (!seen.has(v)) (seen.add(v), st.push(v))
+    while (st.length)
+      for (const v of adj.get(st.pop()!) ?? [])
+        if (!seen.has(v)) {
+          seen.add(v)
+          st.push(v)
+        }
     s.atoms = [...seen]
     s.bonds = Object.values(d.bonds)
       .filter((b) => seen.has(b.a1) && seen.has(b.a2))
@@ -183,7 +188,12 @@ export function countObjects(d: Doc, items: ObjLists): number {
     mols++
     const st = [a]
     seen.add(a)
-    while (st.length) for (const v of adj.get(st.pop()!) ?? []) if (!seen.has(v)) (seen.add(v), st.push(v))
+    while (st.length)
+      for (const v of adj.get(st.pop()!) ?? [])
+        if (!seen.has(v)) {
+          seen.add(v)
+          st.push(v)
+        }
   }
   return mols + KINDS.filter((k) => k !== 'atoms' && k !== 'bonds').reduce((n, k) => n + (m[k]?.length ?? 0), 0)
 }

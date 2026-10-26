@@ -73,6 +73,13 @@ Windows: siehe [WINDOWS.md](WINDOWS.md) (Installer vorbereitet, auf Windows noch
   „openmol“). Word/PowerPoint für Mac behalten das PNG unverändert – das Bild dort kopieren und in OpenMol einfügen,
   schon ist die Struktur wieder bearbeitbar. Unter Windows legt OpenMol das PNG zusätzlich im Office-Format „PNG“ ab
   (eingebaut, noch ungetestet – siehe [WINDOWS.md](WINDOWS.md)).
+- Ansatztabelle ↔ Reaktionspfeil verknüpft: Temperatur, Zeit, Atmosphäre und Lösungsmittel werden in beide Richtungen
+  abgeglichen; Zielkonzentration (Ziel-c) berechnet die Lösungsmittel-Volumina, Gemische mit Volumenteilen
+  (THF/H₂O (4:1)); PubChem ergänzt Molmasse (Stoffe nur mit Namen, z. B. MeI) und die Dichte flüssiger Stoffe
+- Gruppieren (⌘G / ⇧⌘G) und Sperren (⌘L / ⇧⌘L), Drucken (⌘P), Isotopenmuster (Inspektor, Analyse-Text)
+- Lineale, Raster und Hilfslinien (Dokument-Stil), Ausrichten an Blatträndern, Satzspiegel und Seitenmitte
+- Atomnummern für NMR-Zuordnungen: Werkzeug „Nummerieren“ (Klick = nächste Nummer) und automatisch nach
+  vereinfachten IUPAC-Regeln (Vorschlag – keine vollständige Nomenklatur)
 - Word-Add-in „In OpenMol bearbeiten“ (Datei ▸ Word-Add-in einrichten …): Bild in Word markieren → OpenMol öffnet die
   Zeichnung in einem Tab → „Zurück nach Word“ ersetzt das Bild. OpenMol liefert das Add-in selbst über
   `https://localhost:5185` aus (eigenes Zertifikat nur für localhost, dem der Rechner einmal vertraut). Auf dem Mac

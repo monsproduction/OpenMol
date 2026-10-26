@@ -425,8 +425,19 @@ function AtomShape({ scene, a }: { scene: Scene; a: Atom }) {
       </text>,
     )
   }
+  if (d.num) {
+    // Atomnummer (NMR-Zuordnung): klein, in Atomfarbe gedämpft
+    els.push(
+      <text key="num" x={r(d.num.c.x)} y={r(d.num.c.y + fs * 0.2)} fontFamily={font} fontSize={r(fs * 0.58)} fill={a.color ?? NUM_COLOR} textAnchor="middle">
+        {d.num.text}
+      </text>,
+    )
+  }
   return <g opacity={a.opacity}>{els}</g>
 }
+
+/** Farbe der Atomnummern (dunkles Grau – hebt sich von der Strukturformel ab, druckt gut) */
+const NUM_COLOR = '#55606f'
 
 function WarningMarks({ scene }: { scene: Scene }) {
   const doc = scene.doc
