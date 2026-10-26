@@ -1,4 +1,5 @@
 // Befehle, die von Menüs, Tastenkürzeln und der Zeichenfläche gemeinsam genutzt werden.
+import { isotopePattern } from '../model/isotopePattern'
 import { buildGraph, fragments } from '../model/chem'
 import { boxFromPts, mid, type Box } from '../model/geom'
 import * as OCL from 'openchemlib'
@@ -1084,7 +1085,7 @@ export function expandGroups() {
 
 // ---------- Analyse als Text unter das Molekül ----------
 
-export type AnalysisKind = 'name' | 'formula' | 'exact' | 'mw'
+export type AnalysisKind = 'name' | 'formula' | 'exact' | 'mw' | 'isotopes'
 
 /** Ausgewählte Moleküle (Atom-IDs je Molekül) */
 /** Auswahl auf die ganzen Moleküle erweitern, zu denen markierte Atome/Bindungen gehören (übrige Objekte bleiben) */
@@ -1128,7 +1129,7 @@ export async function insertAnalysis(kinds: AnalysisKind[]) {
   const { doc } = getState()
   // Beschriftung in der Sprache der Oberfläche (der Text gehört danach zur Zeichnung)
   const en = getSettings().uiLang === 'en'
-  const lab = { formula: en ? 'Formula: ' : 'Summenformel: ', exact: en ? 'Exact mass: ' : 'Exakte Masse: ', mw: en ? 'Molecular weight: ' : 'Molekulargewicht: ' }
+  const lab = { formula: en ? 'Formula: ' : 'Summenformel: ', exact: en ? 'Exact mass: ' : 'Exakte Masse: ', mw: en ? 'Molecular weight: ' : 'Molekulargewicht: ', iso: en ? 'Isotope pattern: ' : 'Isotopenmuster: ' }
   const lines: { atoms: Id[]; html: string }[] = []
   for (const f of mols) {
     const an = analyze(doc, f)
@@ -1137,6 +1138,11 @@ export async function insertAnalysis(kinds: AnalysisKind[]) {
       if (k === 'formula') lines.push({ atoms: f, html: lab.formula + formulaHtml(an.formula) + (an.charge ? `<sup>${Math.abs(an.charge) > 1 ? Math.abs(an.charge) : ''}${an.charge > 0 ? '+' : '−'}</sup>` : '') })
       else if (k === 'exact') lines.push({ atoms: f, html: lab.exact + (an.generic ? '–' : fmtDec(an.exact, 4)) })
       else if (k === 'mw') lines.push({ atoms: f, html: lab.mw + (an.generic ? '–' : fmtDec(an.mw, 2) + ' g/mol') })
+      else if (k === 'isotopes') {
+        // Peaks ab 1 % des stärksten, Masse auf 4 Stellen
+        const peaks = an.generic ? null : isotopePattern(an.natural, an.labeled, 1)
+        lines.push({ atoms: f, html: lab.iso + (peaks ? peaks.map((p) => `${fmtDec(p.mass, 4)} (${fmtDec(p.rel, p.rel >= 99.95 ? 0 : 1)} %)`).join(', ') : '–') })
+      }
       else if (k === 'name') {
         if (an.generic) {
           toast('Strukturen mit Platzhaltern (R, X …) haben keinen eindeutigen Namen', 'error')

@@ -619,6 +619,9 @@ export interface Analysis {
   unknownLabels: string[]
   /** Nettoladung (Summe der Formalladungen) */
   charge: number
+  /** Atome je Element mit natürlicher Isotopenverteilung bzw. markierte Atome (für das Isotopenmuster) */
+  natural: Record<string, number>
+  labeled: { el: string; nominal: number }[]
 }
 
 export function analyze(doc: Doc, atomIds?: Id[], opts?: { star?: Set<Id> }): Analysis | null {
@@ -640,8 +643,18 @@ export function analyze(doc: Doc, atomIds?: Id[], opts?: { star?: Set<Id> }): An
     generic,
     unknownLabels,
     charge: 0,
+    natural: {},
+    labeled: [],
   }
-  for (let i = 0; i < mol.getAllAtoms(); i++) res.charge += mol.getAtomCharge(i)
+  for (let i = 0; i < mol.getAllAtoms(); i++) {
+    res.charge += mol.getAtomCharge(i)
+    const el = mol.getAtomLabel(i)
+    const mass = mol.getAtomMass(i)
+    if (mass) res.labeled.push({ el, nominal: mass })
+    else res.natural[el] = (res.natural[el] ?? 0) + 1
+    const h = mol.getImplicitHydrogens(i)
+    if (h) res.natural.H = (res.natural.H ?? 0) + h
+  }
   try {
     const p = new OCL.MoleculeProperties(mol)
     res.logP = p.logP
@@ -879,6 +892,75 @@ export async function pubchemGhs(cid: number): Promise<{ codes: string[]; source
   const pick = found.find((f) => /1272\/2008/.test(f.source)) ?? found.find((f) => /ECHA|European Chemicals Agency/i.test(f.source)) ?? found[0]
   const source = /1272\/2008/.test(pick.source) ? 'EU-Einstufung (CLP, Verordnung 1272/2008)' : /ECHA|European Chemicals Agency/i.test(pick.source) ? 'ECHA-Meldung' : pick.source
   return { codes: pick.codes, source }
+}
+
+/** Summenformel und Molmasse zu einer CID (für Stoffe, die nur als Name in der Ansatztabelle stehen, z. B. „MeI“) */
+export async function pubchemFormula(cid: number): Promise<{ formula: string; mw: number } | null> {
+  const r = await netFetch(`${PUG}/cid/${cid}/property/MolecularFormula,MolecularWeight/JSON`)
+  if (r.status === 404 || r.status === 400) return null
+  if (!r.ok) throw new Error('PubChem ist gerade nicht erreichbar.')
+  const p = (await r.json())?.PropertyTable?.Properties?.[0]
+  const mw = Number(p?.MolecularWeight)
+  return typeof p?.MolecularFormula === 'string' && mw > 0 ? { formula: p.MolecularFormula, mw } : null
+}
+
+/** alle Texte eines PubChem-Abschnitts (PUG View, z. B. „Density“) */
+async function pubchemStrings(cid: number, heading: string): Promise<string[]> {
+  const r = await netFetch(`https://pubchem.ncbi.nlm.nih.gov/rest/pug_view/data/compound/${cid}/JSON?heading=${encodeURIComponent(heading)}`)
+  if (r.status === 404 || r.status === 400) return []
+  if (!r.ok) throw new Error('PubChem ist gerade nicht erreichbar.')
+  const out: string[] = []
+  const walk = (o: unknown) => {
+    if (!o || typeof o !== 'object') return
+    const s = (o as { String?: unknown }).String
+    if (typeof s === 'string') out.push(s)
+    for (const v of Object.values(o)) walk(v)
+  }
+  walk((await r.json())?.Record)
+  return out
+}
+
+/**
+ * Flüssig bei Raumtemperatur? Aus den Beschreibungen („Physical Description“): je Text zählt der zuerst genannte
+ * Zustand; Lösungen und Listen aus Industriemeldungen („Liquid; Gas Vapor; CBI …“) zählen nicht. Flüssig nur bei
+ * klarer Mehrheit (mind. zwei Texte).
+ */
+export function liquidFromDescriptions(texts: string[]): boolean {
+  let liquid = 0
+  let other = 0
+  for (const t of texts) {
+    if (/solution|aqueous|CBI|;\s*(liquid|solid|gas)/i.test(t)) continue
+    const m = /\b(liquid|oil|solid|crystal|crystals|crystalline|powder|needles|flakes|prisms|plates|gas|granules)\b/i.exec(t)
+    if (!m) continue
+    if (/^(liquid|oil)$/i.test(m[1])) liquid++
+    else other++
+  }
+  return liquid >= 2 && liquid > other * 2
+}
+
+/**
+ * Dichte (g/mL) aus den PubChem-Angaben („Density“): Zahlen am Textanfang (auch „Relative density (water = 1): …“),
+ * ohne Gas-/Dampf-/Lösungsdichten; der Median gleicht Ausreißer aus. null = nichts Brauchbares.
+ */
+export function densityFromTexts(texts: string[]): number | null {
+  const vals: number[] = []
+  for (const t of texts) {
+    if (/g\/L|air|vapou?r|gas|solution|aqueous|bulk/i.test(t)) continue
+    const m = /^\s*(?:Sp\.? ?gr\.?\s*=?\s*|Relative density \(water ?= ?1\):?\s*|Density:?\s*)?(\d+(?:\.\d+)?)(?![\d.])/i.exec(t)
+    if (!m) continue
+    const v = Number(m[1])
+    if (v >= 0.4 && v <= 25) vals.push(v)
+  }
+  if (!vals.length) return null
+  vals.sort((a, b) => a - b)
+  const med = vals.length % 2 ? vals[(vals.length - 1) / 2] : (vals[vals.length / 2 - 1] + vals[vals.length / 2]) / 2
+  return Math.round(med * 1000) / 1000
+}
+
+/** Dichte eines bei Raumtemperatur flüssigen Stoffs laut PubChem (null = fest/gasförmig/unbekannt) */
+export async function pubchemLiquidDensity(cid: number): Promise<number | null> {
+  if (!liquidFromDescriptions(await pubchemStrings(cid, 'Physical Description'))) return null
+  return densityFromTexts(await pubchemStrings(cid, 'Density'))
 }
 
 /** PubChem-Eintrag zur Struktur: CID, InChIKey, Titel – null, wenn es keinen gibt */

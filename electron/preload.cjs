@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('openmol', {
   saveDialog: (opts) => ipcRenderer.invoke('openmol:save-dialog', opts),
   writeFile: (p, data) => ipcRenderer.invoke('openmol:write-file', p, data),
   printPdf: (html, size) => ipcRenderer.invoke('openmol:print-pdf', html, size),
+  print: (html, size) => ipcRenderer.invoke('openmol:print', html, size),
   clipWrite: (kind, data) => ipcRenderer.invoke('openmol:clip-write', kind, data),
   clipScan: () => ipcRenderer.invoke('openmol:clip-scan'),
   wordResult: (session, png) => ipcRenderer.invoke('openmol:word-result', session, png),

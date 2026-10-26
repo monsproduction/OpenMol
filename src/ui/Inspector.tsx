@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { linearizeTriples, selectionAtomIds } from '../model/ops'
 import { analyze, smilesToName, stereoCenters } from '../model/ocl'
+import { isotopePattern } from '../model/isotopePattern'
 import type { ArrowKind, ArrowRoute, BondType, Cycle, DocStyle, DoublePos, Shape, ShapeKind } from '../model/types'
 import { CLOSED_SHAPES, FONTS, STYLE_PRESETS, emptySelection, selectionSize } from '../model/types'
 import type { FillStyle } from '../model/rings'
@@ -1433,6 +1434,10 @@ function AnalysisPanel() {
                 <dd>{fmtDec(res.mw, 2)} g/mol</dd>
                 <dt>Exakte Masse</dt>
                 <dd>{fmtDec(res.exact, 4)}</dd>
+                <dt>Isotopenmuster</dt>
+                <dd>
+                  <IsoBars natural={res.natural} labeled={res.labeled} />
+                </dd>
               </>
             )}
             {res.generic === 0 && res.composition.length > 0 && (
@@ -1819,5 +1824,25 @@ function TableSection({ id }: { id: string }) {
       </Row>
       <p className="muted small">{`${t.rows.length} Stoffe · Werte mit Struktur verknüpft (⚭) folgen Änderungen an der Zeichnung.`}</p>
     </Section>
+  )
+}
+
+/** Isotopenmuster (M, M+1, M+2 …) als kleine Balken: Masse und relative Intensität, Peaks ab 0,5 % */
+function IsoBars({ natural, labeled }: { natural: Record<string, number>; labeled: { el: string; nominal: number }[] }) {
+  const peaks = useMemo(() => isotopePattern(natural, labeled, 0.5), [natural, labeled])
+  if (!peaks?.length) return <>–</>
+  const base = peaks.reduce((a, b) => (b.rel > a.rel ? b : a)).nominal
+  return (
+    <div className="iso" title="Berechnet aus den natürlichen Isotopenhäufigkeiten; Massen des neutralen Moleküls (ohne Elektronenmasse)">
+      {peaks.slice(0, 12).map((p) => (
+        <div key={p.nominal} className="iso-row">
+          <span className="iso-m">{fmtDec(p.mass, 4)}</span>
+          <span className="iso-bar">
+            <span style={{ width: p.rel + '%' }} />
+          </span>
+          <span className="iso-p">{p.nominal === base ? '100' : fmtDec(p.rel, p.rel >= 10 ? 1 : 2)} %</span>
+        </div>
+      ))}
+    </div>
   )
 }

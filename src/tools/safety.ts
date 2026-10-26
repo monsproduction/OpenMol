@@ -1,4 +1,5 @@
-// CAS-Nummern und GHS-Piktogramme der Ansatztabelle automatisch aus PubChem ergänzen (online). Jede Zeile wird nur
+// CAS-Nummern und GHS-Piktogramme der Ansatztabelle automatisch aus PubChem ergänzen (online), dazu Molmasse (Stoffe
+// nur mit Namen) und Dichte flüssiger Stoffe. Jede Zeile wird nur
 // einmal gesucht (safetyChecked); vorhandene CAS-Nummern werden nie überschrieben. Alle Ergebnisse kommen in einem
 // Schritt in die Tabelle (ein Rückgängig-Schritt).
 import { lookupRowSafety, rowMW } from '../model/stoich'
@@ -53,6 +54,8 @@ export async function fillSafety(tableId: Id, opts: { force?: boolean; quiet?: b
   const missing: string[] = []
   let cas = 0
   let ghs = 0
+  let mw = 0
+  let dens = 0
   commit((d) => {
     const t = d.tables?.[tableId]
     if (!t) return
@@ -73,10 +76,22 @@ export async function fillSafety(tableId: Id, opts: { force?: boolean; quiet?: b
         r.ghsSource = res.ghs.source
         if (res.ghs.codes.length) ghs++
       }
+      // nur ergänzen, nie Eingaben überschreiben (die Zeile kann sich während der Suche geändert haben)
+      if (res.formula && !r.atom && !r.formula && !r.mw) {
+        r.formula = res.formula.formula
+        // Molmasse aus der Formel rechnen lassen; nur wenn die Formel nicht lesbar ist, die von PubChem merken
+        if (!rowMW(d, r).mw) r.mw = res.formula.mw
+        mw++
+      }
+      if (res.density && r.density === undefined && !r.conc) {
+        r.density = res.density
+        dens++
+      }
     }
   })
-  if (cas || ghs || !opts.quiet) {
+  if (cas || ghs || mw || dens || !opts.quiet) {
     const miss = missing.length ? ` – nicht in PubChem: ${missing.join(', ')}` : ''
-    toast(`PubChem: ${cas} CAS-Nummer(n), ${ghs}× GHS-Symbole ergänzt – bitte prüfen${miss}`)
+    if (mw || dens) toast(`PubChem: ${cas} CAS-Nummer(n), ${ghs}× GHS-Symbole, ${mw}× Molmasse, ${dens}× Dichte ergänzt – bitte prüfen${miss}`)
+    else toast(`PubChem: ${cas} CAS-Nummer(n), ${ghs}× GHS-Symbole ergänzt – bitte prüfen${miss}`)
   }
 }

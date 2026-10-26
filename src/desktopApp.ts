@@ -19,7 +19,7 @@ import {
 } from './tools/actions'
 import { cleanReaction } from './tools/cleanup'
 import { exportCdxml } from './tools/cdxml'
-import { closeTab, confirmDiscardAll, copyImageToClipboard, currentFilePath, exportMolfile, exportPdf, exportPng, exportSvg, newDocument, openFile, openText, saveDocument } from './tools/io'
+import { closeTab, confirmDiscardAll, copyImageToClipboard, currentFilePath, exportMolfile, exportPdf, exportPng, exportSvg, newDocument, openFile, openText, printDocument, saveDocument } from './tools/io'
 import { toggleTheme } from './ui/TopBar'
 import { openFromWord } from './wordLink'
 
@@ -55,6 +55,7 @@ export function runMenuCommand(cmd: string) {
     exportSvg: () => exportSvg(),
     exportMol: exportMolfile,
     exportPdf,
+    print: printDocument,
     exportCdxml,
     settings: () => setState({ dialog: 'settings' }),
     help: () => setState({ dialog: 'help' }),

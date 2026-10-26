@@ -29,6 +29,8 @@ export interface DesktopApi {
   writeFile: (p: string, data: string | Uint8Array) => Promise<boolean>
   /** HTML (je Blatt ein SVG) als PDF drucken; Seitengröße in Zoll */
   printPdf: (html: string, size: { width: number; height: number }) => Promise<Uint8Array>
+  /** Seiten mit dem Druckdialog des Systems drucken */
+  print: (html: string, size: { width: number; height: number }) => Promise<{ ok: boolean; canceled: boolean; reason: string }>
   /** PNG (mit OpenMol-Daten) unverändert auf die Zwischenablage */
   clipWrite: (kind: 'png', data: Uint8Array) => Promise<boolean>
   /** OpenMol-Daten („OM1:…“) aus einem beliebigen Format der Zwischenablage, sonst null */

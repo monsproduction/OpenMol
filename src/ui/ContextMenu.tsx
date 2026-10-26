@@ -132,6 +132,7 @@ function entries(at: { x: number; y: number }, pick: boolean): Entry[] {
               { label: 'Summenformel', action: mol(() => insertAnalysis(['formula'])) },
               { label: 'Exakte Masse', action: mol(() => insertAnalysis(['exact'])) },
               { label: 'Molekulargewicht', action: mol(() => insertAnalysis(['mw'])) },
+              { label: 'Isotopenmuster', action: mol(() => insertAnalysis(['isotopes'])) },
               { label: 'Alle vier', action: mol(() => insertAnalysis(['name', 'formula', 'exact', 'mw'])) },
             ],
           },

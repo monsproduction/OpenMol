@@ -336,7 +336,7 @@ export function OptionsBar() {
           <OptBtn icon="chair1" title="Cyclohexan (Sessel)" active={opts.ringKind === 'chair1'} onClick={() => setTool('ring', { ringKind: 'chair1' })} />
           <OptBtn icon="chair2" title="Cyclohexan (Sessel, gespiegelt)" active={opts.ringKind === 'chair2'} onClick={() => setTool('ring', { ringKind: 'chair2' })} />
           <OptBtn icon="cyclopentadiene" title="Cyclopentadien" active={opts.ringKind === 'cp'} onClick={() => setTool('ring', { ringKind: 'cp' })} />
-          <OptBtn icon="benzene" title="Benzol" active={opts.ringKind === 'regular' && opts.ringSize === 6 && opts.ringAromatic} onClick={() => setTool('ring', { ringSize: 6, ringAromatic: true, ringKind: 'regular' })} />
+          <OptBtn icon="benzene" title="Benzol (R / J)" active={opts.ringKind === 'regular' && opts.ringSize === 6 && opts.ringAromatic} onClick={() => setTool('ring', { ringSize: 6, ringAromatic: true, ringKind: 'regular' })} />
         </>
       )
       hint = 'Klick ins Leere = Ring · auf Atom = Spiro/angefügt · auf Bindung = ankondensiert'

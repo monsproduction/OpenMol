@@ -3,7 +3,7 @@
 // Äquivalente → n, m, V werden berechnet; Masse/Volumen/Stoffmenge → Äquivalente werden zurückgerechnet.
 import { ATOMIC_WEIGHT } from './elements'
 import { fmtDec } from '../settings'
-import { analyze, pubchemCasByCid, pubchemCidByName, pubchemGhs, pubchemLookup, toSmiles } from './ocl'
+import { analyze, pubchemCasByCid, pubchemCidByName, pubchemFormula, pubchemGhs, pubchemLiquidDensity, pubchemLookup, toSmiles } from './ocl'
 import type { Doc, Id, StoichRole, StoichRow, StoichTable, StoichUnitKey } from './types'
 import { uid } from './types'
 
@@ -279,12 +279,32 @@ async function rowCid(doc: Doc, r: StoichRow): Promise<number | null> {
   return null
 }
 
-/** CAS-Nummer und GHS-Piktogramme einer Zeile aus PubChem (null = Stoff in PubChem nicht gefunden) */
-export async function lookupRowSafety(doc: Doc, r: StoichRow): Promise<{ cas: string | null; ghs: { codes: string[]; source: string } | null } | null> {
+export interface RowLookup {
+  cas: string | null
+  ghs: { codes: string[]; source: string } | null
+  /** nur für Stoffe ohne Struktur und ohne eigene Formel/Molmasse (z. B. „MeI“ als Name) */
+  formula?: { formula: string; mw: number } | null
+  /** Dichte (g/mL), nur wenn der Stoff bei Raumtemperatur flüssig ist und die Zeile noch keine Dichte hat */
+  density?: number | null
+}
+
+/**
+ * CAS-Nummer und GHS-Piktogramme einer Zeile aus PubChem, dazu Summenformel/Molmasse (Stoffe nur mit Namen) und die
+ * Dichte flüssiger Stoffe (null = Stoff in PubChem nicht gefunden)
+ */
+export async function lookupRowSafety(doc: Doc, r: StoichRow): Promise<RowLookup | null> {
   const cid = await rowCid(doc, r)
   if (!cid) return null
-  const [cas, ghs] = await Promise.all([pubchemCasByCid(cid), pubchemGhs(cid)])
-  return { cas, ghs }
+  const needFormula = !r.atom && !r.formula && !r.mw
+  // Lösungen (mit Konzentration) haben ihre eigene Dichte; Produkte werden nicht abgemessen
+  const needDensity = r.density === undefined && !r.conc && r.role !== 'product'
+  const [cas, ghs, formula, density] = await Promise.all([
+    pubchemCasByCid(cid),
+    pubchemGhs(cid),
+    needFormula ? pubchemFormula(cid) : undefined,
+    needDensity ? pubchemLiquidDensity(cid) : undefined,
+  ])
+  return { cas, ghs, formula, density }
 }
 
 /** CAS-Nummer einer Zeile über PubChem; null = nicht gefunden */

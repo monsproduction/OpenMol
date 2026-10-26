@@ -993,6 +993,34 @@ body.dragging-section * {
   font-variant-numeric: tabular-nums;
 }
 
+.analysis .iso {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+}
+
+.analysis .iso-row {
+  display: grid;
+  grid-template-columns: auto 1fr 3.6em;
+  align-items: center;
+  gap: 6px;
+}
+
+.analysis .iso-bar {
+  height: 7px;
+  min-width: 40px;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.analysis .iso-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
 .analysis .ea {
   display: flex;
   flex-direction: column;

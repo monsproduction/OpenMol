@@ -276,7 +276,8 @@ function registerIpc() {
 
   // PDF: die Oberfläche liefert eine HTML-Seite mit je einem SVG pro Blatt; ein unsichtbares Fenster ohne JavaScript
   // druckt sie als Vektor-PDF (Schriften eingebettet). Gespeichert wird danach über den normalen Speichern-Dialog.
-  ipcMain.handle('openmol:print-pdf', async (_e, html, size) => {
+  /** Seiten in ein unsichtbares Fenster ohne JavaScript laden und damit arbeiten (PDF erzeugen bzw. drucken) */
+  async function withPageWindow(html, size, fn) {
     const w = Number(size?.width)
     const h = Number(size?.height)
     if (typeof html !== 'string' || html.length > 200e6 || !(w > 0.5 && w < 200) || !(h > 0.5 && h < 200)) throw new Error('ungültige Seite')
@@ -286,18 +287,34 @@ function registerIpc() {
     pw.webContents.on('will-navigate', (e) => e.preventDefault())
     try {
       await pw.loadFile(tmp)
-      const buf = await pw.webContents.printToPDF({ pageSize: { width: w, height: h }, margins: { marginType: 'none' }, printBackground: true, preferCSSPageSize: true })
-      return new Uint8Array(buf)
+      return await fn(pw.webContents, w, h)
     } finally {
       pw.destroy()
       fs.promises.rm(tmp, { force: true }).catch(() => {})
     }
-  })
+  }
+  ipcMain.handle('openmol:print-pdf', (_e, html, size) =>
+    withPageWindow(html, size, async (wc, w, h) => {
+      const buf = await wc.printToPDF({ pageSize: { width: w, height: h }, margins: { marginType: 'none' }, printBackground: true, preferCSSPageSize: true })
+      return new Uint8Array(buf)
+    }),
+  )
+  // Drucken: dieselben Seiten mit dem Druckdialog des Systems (Seitengröße in Mikrometern); Abbrechen ist kein Fehler
+  ipcMain.handle('openmol:print', (_e, html, size) =>
+    withPageWindow(
+      html,
+      size,
+      (wc, w, h) =>
+        new Promise((resolve) =>
+          wc.print({ silent: false, printBackground: true, margins: { marginType: 'none' }, pageSize: { width: Math.round(w * 25400), height: Math.round(h * 25400) } }, (ok, reason) =>
+            resolve({ ok, canceled: !ok && /cancel/i.test(String(reason ?? '')), reason: ok ? '' : String(reason ?? '') }),
+          ),
+        ),
+    ),
+  )
 
   // ---------- Zwischenablage: Bild mit OpenMol-Daten (OM1:…) schreiben und zurück lesen ----------
-  // Mac: PNG roh als public.png – als image/png würde Chromium es neu codieren und den Datenblock verwerfen. Word und
-  // PowerPoint für Mac behalten es unverändert (getestet). Windows: vorerst als normales Bild (ohne Daten), bis der
-  // Rohweg dort getestet ist (andere Programme brauchen dort zusätzlich die üblichen Bitmap-Formate)
+  // Wie genau geschrieben wird (Mac roh als public.png, Windows zusätzlich im Office-Format „PNG“): electron/clipboard.mjs
   ipcMain.handle('openmol:clip-write', (_e, kind, data) => (kind === 'png' && data instanceof Uint8Array ? writePng(data) : false))
   ipcMain.handle('openmol:clip-scan', () => scanClipboard())
   // „Zurück nach Word“: fertiges Bild für die wartende Add-in-Seite bereitlegen

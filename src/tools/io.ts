@@ -250,7 +250,12 @@ export function pdfHtml(doc: Doc): { html: string; width: number; height: number
     const box = sceneBBox(scene)
     if (!box) return null
     const pad = 24
-    pages = [{ x: box.x1 - pad, y: box.y1 - pad, w: box.x2 - box.x1 + 2 * pad, h: box.y2 - box.y1 + 2 * pad }]
+    // mindestens 1 Zoll je Richtung, Zeichnung mittig: Chromium lehnt kleinere Seiten ab (unter ~0,8 Zoll
+    // „content area is empty“ – z. B. ein einzelnes Brombenzol)
+    const min = 72 / PT_PER_UNIT
+    const w = Math.max(box.x2 - box.x1 + 2 * pad, min)
+    const h = Math.max(box.y2 - box.y1 + 2 * pad, min)
+    pages = [{ x: (box.x1 + box.x2 - w) / 2, y: (box.y1 + box.y2 - h) / 2, w, h }]
   }
   const inner = innerMarkup(scene)
   const bg = safeColor(doc.style.background) ?? '#ffffff'
@@ -278,15 +283,33 @@ export async function exportPdf() {
     }
     return
   }
+  browserPrint(r.html)
+}
+
+/** im Browser: Seiten in einem unsichtbaren Rahmen über den Druckdialog des Browsers */
+function browserPrint(html: string) {
   const f = document.createElement('iframe')
   f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
-  f.srcdoc = r.html
+  f.srcdoc = html
   f.onload = () => {
     f.contentWindow?.focus()
     f.contentWindow?.print()
     setTimeout(() => f.remove(), 60_000)
   }
   document.body.appendChild(f)
+}
+
+/** Drucken (⌘P): dieselben Seiten wie beim PDF-Export (Seitenlayout aus dem Dokument-Stil, je Blatt eine Seite) */
+export async function printDocument() {
+  const r = pdfHtml(getState().doc)
+  if (!r) return toast('Nichts zu drucken', 'error')
+  if (!desktop) return browserPrint(r.html)
+  try {
+    const res = await desktop.print(r.html, { width: r.width, height: r.height })
+    if (!res.ok && !res.canceled) toast(T('Drucken fehlgeschlagen') + (res.reason ? ': ' + res.reason : ''), 'error')
+  } catch (e) {
+    toast(T('Drucken fehlgeschlagen') + ': ' + (e instanceof Error ? e.message : String(e)), 'error')
+  }
 }
 
 /** Kopiert die Auswahl (oder alles) als PNG – direkt in Word, PowerPoint, Keynote … einfügbar */

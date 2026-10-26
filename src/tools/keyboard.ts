@@ -21,7 +21,7 @@ import {
 } from './actions'
 import { cleanReaction } from './cleanup'
 import { ATOM_KEYS, BOND_KEYS, atomHotkey, bondHotkey, grabHotspot, hotspotFromSelection, liveHotspot, moveHotspot, reactionShortcut, selectHotspotMolecule } from './hotkeys'
-import { openFile, saveDocument } from './io'
+import { openFile, printDocument, saveDocument } from './io'
 import { decodeClipPayload, findClipPayload } from './clipData'
 import { desktop } from '../desktop'
 import { T } from '../i18n/i18n'
@@ -169,6 +169,9 @@ export function handleKeyDown(e: KeyboardEvent) {
     } else if (lk === 'e') {
       e.preventDefault()
       setState({ dialog: 'export' })
+    } else if (lk === 'p' && !e.shiftKey && !e.altKey) {
+      e.preventDefault()
+      void printDocument()
     } else if (lk === '0') {
       e.preventDefault()
       fitView()
@@ -392,6 +395,9 @@ export function handleKeyDown(e: KeyboardEvent) {
       break
     case 'r':
     case 'R':
+    // J ebenfalls Benzol (über Atom/Bindung gelten die ChemDraw-Tasten oben)
+    case 'j':
+    case 'J':
       setTool('ring', { ringSize: 6, ringAromatic: true, ringKind: 'regular' })
       break
     case 'a':
