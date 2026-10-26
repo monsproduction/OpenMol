@@ -566,7 +566,7 @@ export function splitSolvents(tok: string): { names: string[]; parts?: number[];
     const items = br[1].split(/;|,\s+/).map((x) => x.trim())
     const r = items.map(ratioOf)
     const c = items.map(concValue)
-    if (items.every((x, k) => r[k] || c[k])) {
+    if (items.every((_x, k) => r[k] || c[k])) {
       parts = r.find(Boolean) ?? undefined
       conc = c.find((x) => x !== null) ?? undefined
       t = t.slice(0, br.index).trim()
