@@ -1857,7 +1857,7 @@ function CycleSection({ c }: { c: Cycle }) {
       </div>
       <button
         className="btn small wide"
-        data-tip="Kleineren, gegenläufigen Zyklus oben rechts überlappend anhängen (wie Cu-Zyklus bei der Sonogashira-Kupplung). Gezielt: Modus „2. Zyklus“ und auf den Kreis klicken"
+        data-tip="Kleineren, gegenläufigen Zyklus oben rechts außen andocken (wie Cu-Zyklus bei der Sonogashira-Kupplung). Gezielt: Modus „2. Zyklus“ und auf den Kreis klicken"
         onClick={() => {
           const nc = attachCycle(c, -45)
           commit((d) => {
@@ -1981,7 +1981,7 @@ function LayoutAidsControls() {
 function GradientPick({ value, base, onChange }: { value: Gradient | undefined; base: string; onChange: (g: Omit<Gradient, 'id'> | null) => void }) {
   if (!value)
     return (
-      <button className="btn small" onClick={() => onChange({ c1: base.startsWith('#') ? base : '#2f6bff', c2: '#d63384', grad: 'linear', angle: 0 })} data-tip="Farbverlauf über die ganze Auswahl (z. B. das markierte Molekül)">
+      <button className="btn small" onClick={() => onChange({ c1: base.startsWith('#') && base.toLowerCase() !== '#111418' ? base : '#2f6bff', c2: '#d63384', grad: 'linear', angle: 0 })} data-tip="Farbverlauf über die ganze Auswahl (z. B. das markierte Molekül)">
         Verlauf hinzufügen
       </button>
     )

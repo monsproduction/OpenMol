@@ -30,11 +30,11 @@ store.setNewDocFactory(newDoc)
 }
 
 // bei jeder Änderung: Ansatztabellen mit verknüpftem Reaktionspfeil abgleichen, Gruppen/Sperrliste aufräumen
-store.setCommitHook((d) => {
+store.setCommitHook((d, before) => {
   syncReactionLinks(d)
   pruneGroups(d)
   // an skalierte Moleküle neu gezeichnete Atome übernehmen deren Größe
-  propagateMolScale(d)
+  propagateMolScale(d, before)
   pruneGradients(d)
 })
 

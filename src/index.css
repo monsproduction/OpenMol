@@ -2802,3 +2802,7 @@ code {
 .set-path {
   word-break: break-all;
 }
+
+.warn-note {
+  color: #b45309;
+}

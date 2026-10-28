@@ -951,6 +951,11 @@ function LibraryLocation() {
         </div>
       </SRow>
       <p className="muted small set-note set-path">{loc ? loc.path : '…'}</p>
+      {loc?.dir && !loc.path.startsWith(loc.dir) && (
+        <p className="small set-note warn-note">
+          {T('Der gewählte Ordner ist gerade nicht erreichbar – OpenMol nutzt bis dahin die Kopie im App-Ordner:')} {loc.dir}
+        </p>
+      )}
     </>
   )
 }

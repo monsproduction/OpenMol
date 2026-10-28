@@ -80,9 +80,9 @@ export function setMolScale(d: Doc, atomIds: Id[], s: number) {
 /**
  * Nach jeder Änderung: an ein skaliertes Molekül neu gezeichnete Atome (Bindungswerkzeug, Ring, ChemDraw-Taste,
  * Vorlage …) übernehmen dessen Größe – ihre Lage wird um das Anknüpfungsatom gestreckt, sodass auch die neuen
- * Bindungen die skalierte Länge haben.
+ * Bindungen die skalierte Länge haben. Atome, die es vorher schon gab (before), bleiben, wo und wie groß sie sind.
  */
-export function propagateMolScale(d: Doc) {
+export function propagateMolScale(d: Doc, before?: Doc) {
   const scaled = Object.values(d.atoms).filter((a) => a.scale !== undefined && a.scale !== 1)
   if (!scaled.length) return
   const adj = new Map<Id, Id[]>()
@@ -94,7 +94,8 @@ export function propagateMolScale(d: Doc) {
   for (const a of scaled) {
     for (const nbId of adj.get(a.id) ?? []) {
       const nb = d.atoms[nbId]
-      if (!nb || nb.scale !== undefined || done.has(nbId)) continue
+      // nur neu gezeichnete Atome: ein schon vorhandenes Molekül, das angebunden wird, springt nicht
+      if (!nb || nb.scale !== undefined || done.has(nbId) || before?.atoms[nbId]) continue
       // zusammenhängende neue (unskalierte) Atome hinter diesem Nachbarn
       const comp: Id[] = []
       const st = [nbId]
@@ -103,7 +104,7 @@ export function propagateMolScale(d: Doc) {
         const u = st.pop()!
         comp.push(u)
         for (const v of adj.get(u) ?? [])
-          if (!seen.has(v) && d.atoms[v] && d.atoms[v].scale === undefined) {
+          if (!seen.has(v) && d.atoms[v] && d.atoms[v].scale === undefined && !before?.atoms[v]) {
             seen.add(v)
             st.push(v)
           }

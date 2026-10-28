@@ -315,8 +315,9 @@ export function setNewDocFactory(f: () => Doc) {
 }
 
 /** läuft am Ende jedes commit im selben Schritt (gleicher Rückgängig-Schritt), z. B. Abgleich Pfeil ↔ Ansatztabelle */
-let commitHook: ((d: Doc) => void) | null = null
-export function setCommitHook(f: ((d: Doc) => void) | null) {
+let commitHook: ((d: Doc, before: Doc) => void) | null = null
+/** f(d, before): d = Entwurf nach der Änderung, before = Stand davor */
+export function setCommitHook(f: ((d: Doc, before: Doc) => void) | null) {
   commitHook = f
 }
 
@@ -324,7 +325,7 @@ export function commit(recipe: (d: Doc) => void | Selection, opts: { keepSel?: b
   let newSel: Selection | undefined
   const next = produce(state.doc, (d) => {
     const r = recipe(d as Doc)
-    commitHook?.(d as Doc)
+    commitHook?.(d as Doc, state.doc)
     // nur echte Auswahl-Objekte übernehmen (versehentliche Rückgabewerte ignorieren)
     if (r && typeof r === 'object' && Array.isArray((r as Selection).atoms) && Array.isArray((r as Selection).bonds)) newSel = { ...emptySelection(), ...r }
   })

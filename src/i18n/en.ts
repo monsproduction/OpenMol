@@ -220,6 +220,7 @@ export const EN: Record<string, string> = {
   Benzol: 'Benzene',
   'Benzol (R / J)': 'Benzene (R / J)',
   'Nichts zu drucken': 'Nothing to print',
+  'Der gewählte Ordner ist gerade nicht erreichbar – OpenMol nutzt bis dahin die Kopie im App-Ordner:': 'The chosen folder is currently not reachable – until then OpenMol uses the copy in the app folder:',
   Speicherort: 'Location',
   'Ordner wählen …': 'Choose folder …',
   'App-Ordner': 'App folder',
@@ -428,7 +429,7 @@ export const EN: Record<string, string> = {
   'Von außen auf den Kreis ziehen (oder auf den Kreis klicken) · Doppelklick auf das freie Ende beschriftet': 'Drag onto the circle from outside (or click the circle) · double-click the free end to label it',
   'Vom Kreis weg ziehen (oder auf den Kreis klicken) · Doppelklick auf das freie Ende beschriftet': 'Drag away from the circle (or click the circle) · double-click the free end to label it',
   'Klick auf den Kreis: Zufluss + Abfluss an derselben Stelle · Enden mit dem Auswahlwerkzeug verschieben': 'Click the circle: input + output at the same spot · move the ends with the select tool',
-  'Klick auf den Kreis: zweiter, kleinerer Zyklus überlappt dort (gegenläufig) – danach frei verschiebbar': 'Click the circle: a second, smaller cycle overlaps there (opposite direction) – movable afterwards',
+  'Klick auf den Kreis: zweiter, kleinerer Zyklus dockt dort außen an (berührt nur dort, gegenläufig) – danach frei verschiebbar': 'Click the circle: a second, smaller cycle docks on the outside there (touching only there, opposite direction) – movable afterwards',
   'Klick auf Atom = hinzufügen · Umschalt+Klick = entfernen': 'Click an atom = add · Shift+click = remove',
   'Klick auf ein Endatom macht daraus einen Anknüpfungspunkt (Wellenlinie)': 'Click a terminal atom to turn it into an attachment point (wavy line)',
   'Klicke mit dem Bindungswerkzeug irgendwo hin, um anzufangen – oder:': 'Click anywhere with the bond tool to start – or:',
@@ -510,8 +511,8 @@ export const EN: Record<string, string> = {
   'Edukt, z. B. R–X': 'Reactant, e.g. R–X',
   Produkt: 'Product',
   Schritt: 'Step',
-  'Kleineren, gegenläufigen Zyklus oben rechts überlappend anhängen (wie Cu-Zyklus bei der Sonogashira-Kupplung). Gezielt: Modus „2. Zyklus“ und auf den Kreis klicken':
-    'Attach a smaller counter-rotating cycle overlapping at the top right (like the Cu cycle of the Sonogashira coupling). Precisely: mode “2nd cycle” and click on the circle',
+  'Kleineren, gegenläufigen Zyklus oben rechts außen andocken (wie Cu-Zyklus bei der Sonogashira-Kupplung). Gezielt: Modus „2. Zyklus“ und auf den Kreis klicken':
+    'Dock a smaller counter-rotating cycle on the outside at the top right (like the Cu cycle of the Sonogashira coupling). Precisely: mode “2nd cycle” and click on the circle',
   'Zur Bibliothek hinzufügen': 'Add to library',
   'Markierte Struktur mit eigenem Namen in einer eigenen Sammlung der Vorlagen-Bibliothek speichern': 'Save the selected structure under your own name in a collection of the template library',
   'PubChem-Eintrag des markierten Moleküls öffnen (online)': 'Open the PubChem entry of the selected molecule (online)',

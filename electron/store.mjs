@@ -20,10 +20,28 @@ function libraryDir() {
   }
   return null
 }
-/** voller Pfad einer Datei: library.json ggf. im gewählten Ordner */
+/**
+ * voller Pfad einer Datei: library.json ggf. im gewählten Ordner. Ist der Ordner gerade nicht erreichbar (Cloud
+ * offline, Laufwerk abgezogen), gilt die Kopie im App-Ordner, die bei jedem Speichern mitgeschrieben wird.
+ */
 function filePath(file) {
   const dir = file === 'library.json' ? libraryDir() : null
-  return dir ? path.join(dir, LIB_NAME) : path.join(app.getPath('userData'), file)
+  return dir && fs.existsSync(dir) ? path.join(dir, LIB_NAME) : path.join(app.getPath('userData'), file)
+}
+
+/** Sicherung einer nicht lesbaren Datei, bevor sie überschrieben wird (z. B. halb synchronisiert) */
+function backupBroken(p) {
+  try {
+    if (!fs.existsSync(p)) return
+    JSON.parse(fs.readFileSync(p, 'utf8'))
+  } catch {
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+    try {
+      fs.copyFileSync(p, p.replace(/\.json$/, '') + '.defekt-' + stamp + '.json')
+    } catch {
+      // Sicherung nicht möglich – dann wenigstens nicht abbrechen
+    }
+  }
 }
 /** Änderungszeit der zuletzt gelesenen/geschriebenen Fassung (für Änderungen von einem anderen Rechner) */
 const seenMtime = new Map()
@@ -75,6 +93,7 @@ function writeNow(file) {
   try {
     fs.mkdirSync(path.dirname(p), { recursive: true })
     const text = JSON.stringify(data.get(file) ?? {}, null, 1)
+    backupBroken(p)
     fs.writeFileSync(tmp, text)
     try {
       fs.renameSync(tmp, p)
@@ -84,6 +103,9 @@ function writeNow(file) {
       fs.rmSync(tmp, { force: true })
     }
     seenMtime.set(file, mtime(p))
+    // eigener Ordner für die Sammlungen: Kopie im App-Ordner mitschreiben (gilt, falls der Ordner nicht erreichbar ist)
+    const local = path.join(app.getPath('userData'), file)
+    if (p !== local) fs.writeFileSync(local, text)
   } catch (e) {
     console.error('OpenMol: Speichern fehlgeschlagen', file, e)
   }

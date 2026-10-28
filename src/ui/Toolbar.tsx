@@ -516,7 +516,7 @@ export function OptionsBar() {
         in: 'Von außen auf den Kreis ziehen (oder auf den Kreis klicken) · Doppelklick auf das freie Ende beschriftet',
         out: 'Vom Kreis weg ziehen (oder auf den Kreis klicken) · Doppelklick auf das freie Ende beschriftet',
         pair: 'Klick auf den Kreis: Zufluss + Abfluss an derselben Stelle · Enden mit dem Auswahlwerkzeug verschieben',
-        second: 'Klick auf den Kreis: zweiter, kleinerer Zyklus überlappt dort (gegenläufig) – danach frei verschiebbar',
+        second: 'Klick auf den Kreis: zweiter, kleinerer Zyklus dockt dort außen an (berührt nur dort, gegenläufig) – danach frei verschiebbar',
       }[opts.cycleMode]
       break
     case 'eraser':
