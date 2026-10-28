@@ -11,6 +11,7 @@ import {
   arrowTextBlocks,
   bondEnds,
   clipParallel,
+  clipParallelSet,
   curvedGeom,
   doubleSide,
   ringPolygonPath,
@@ -250,11 +251,15 @@ function bondInner(scene: Scene, b: Bond) {
     }
     case 'triple': {
       const g = gap * 0.85
-      const [u1, u2] = clipParallel(scene, b, add(A1, mul(n, g)), add(A2, mul(n, g)))
-      const [w1, w2] = clipParallel(scene, b, sub(A1, mul(n, g)), sub(A2, mul(n, g)))
+      // alle drei Linien gleich weit gekürzt (Enden quer zur Bindung ausgerichtet)
+      const [[m1, m2], [u1, u2], [w1, w2]] = clipParallelSet(scene, b, [
+        [A1, A2],
+        [add(A1, mul(n, g)), add(A2, mul(n, g))],
+        [sub(A1, mul(n, g)), sub(A2, mul(n, g))],
+      ])
       return (
         <g>
-          {line(p1, p2, lw, color)}
+          {line(m1, m2, lw, color)}
           {line(u1, u2, lw, color)}
           {line(w1, w2, lw, color)}
         </g>
@@ -278,8 +283,11 @@ function bondInner(scene: Scene, b: Bond) {
       const dash = b.type === 'aromatic' ? { strokeDasharray: `${r(lw * 2)} ${r(lw * 2)}`, strokeLinecap: 'butt' } : {}
       if (side === 0) {
         const g = gap / 2
-        const [u1, u2] = clipParallel(scene, b, add(A1, mul(n, g)), add(A2, mul(n, g)))
-        const [w1, w2] = clipParallel(scene, b, sub(A1, mul(n, g)), sub(A2, mul(n, g)))
+        // beide Linien gleich lang (wie ChemDraw), auch bei gedrehter Bindung
+        const [[u1, u2], [w1, w2]] = clipParallelSet(scene, b, [
+          [add(A1, mul(n, g)), add(A2, mul(n, g))],
+          [sub(A1, mul(n, g)), sub(A2, mul(n, g))],
+        ])
         return (
           <g>
             {line(u1, u2, lw, color)}
@@ -470,11 +478,11 @@ function WarningMarks({ scene }: { scene: Scene }) {
 
 // ---------- Pfeile ----------
 
-export function headPath(tip: Pt, dir: Pt, size: number, mode: 'full' | 'left' | 'right'): string {
+export function headPath(tip: Pt, dir: Pt, size: number, mode: 'full' | 'left' | 'right', widthRatio = 0.38): string {
   const n = perp(dir)
   const back = sub(tip, mul(dir, size))
   const notch = sub(tip, mul(dir, size * 0.72))
-  const w = size * 0.38
+  const w = size * widthRatio
   const lft = add(back, mul(n, w))
   const rgt = sub(back, mul(n, w))
   if (mode === 'full') return `M${P(tip)} L${P(lft)} L${P(notch)} L${P(rgt)} Z`
@@ -530,15 +538,18 @@ function ArrowShape({ doc, ar }: { doc: Doc; ar: Arrow }) {
     const d = norm(sub(e, s))
     const n = perp(d)
     if (ar.kind === 'equilibrium') {
-      const g = lw * 2.2
+      // wie in ChemDraw: zwei eng beieinander liegende Linien, jede mit einer langen, schlanken Halbspitze nach außen;
+      // die Linie läuft bis in die Spitze
+      const g = lw * 1.35
+      const he = hs * 1.9
       const s1 = add(s, mul(n, g))
       const e1 = add(e, mul(n, g))
       const s2 = sub(s, mul(n, g))
       const e2 = sub(e, mul(n, g))
-      shaft(s1, sub(e1, mul(d, hs * 0.5)), 'a')
-      shaft(add(s2, mul(d, hs * 0.5)), e2, 'b')
-      els.push(<path key="h1" d={headPath(e1, d, hs, 'left')} fill={color} />)
-      els.push(<path key="h2" d={headPath(s2, mul(d, -1), hs, 'left')} fill={color} />)
+      shaft(s1, sub(e1, mul(d, lw * 0.6)), 'a')
+      shaft(add(s2, mul(d, lw * 0.6)), e2, 'b')
+      els.push(<path key="h1" d={headPath(e1, d, he, 'left', 0.36)} fill={color} />)
+      els.push(<path key="h2" d={headPath(s2, mul(d, -1), he, 'left', 0.36)} fill={color} />)
     } else if (ar.kind === 'retro') {
       const g = lw * 2.6
       const tipBack = sub(e, mul(d, g * 1.6))

@@ -129,6 +129,34 @@ export function bondEnds(scene: Scene, b: Bond): { p1: Pt; p2: Pt; c1: number; c
  * p liegt nahe a1, q nahe a2.
  */
 export function clipParallel(scene: Scene, b: Bond, p: Pt, q: Pt): [Pt, Pt] {
+  const [t0, t1] = clipParallelT(scene, b, p, q)
+  if (t1 <= t0) return [p, p]
+  const v = sub(q, p)
+  return [add(p, mul(v, t0)), add(p, mul(v, t1))]
+}
+
+/**
+ * Mehrere parallele Linien einer Bindung (Dreifach-, mittige Doppelbindung) gleich weit kürzen – wie in ChemDraw:
+ * die Enden liegen auf einer Linie quer zur Bindung, alle Linien sind gleich lang, egal wie die Bindung gedreht ist.
+ * (Einzeln abgeschnitten träfe bei schräger Bindung jede Linie den Beschriftungsrahmen an einer anderen Stelle.)
+ */
+export function clipParallelSet(scene: Scene, b: Bond, lines: [Pt, Pt][]): [Pt, Pt][] {
+  let t0 = 0
+  let t1 = 1
+  for (const [p, q] of lines) {
+    const [a, c] = clipParallelT(scene, b, p, q)
+    t0 = Math.max(t0, a)
+    t1 = Math.min(t1, c)
+  }
+  return lines.map(([p, q]) => {
+    if (t1 <= t0) return [p, p]
+    const v = sub(q, p)
+    return [add(p, mul(v, t0)), add(p, mul(v, t1))]
+  })
+}
+
+/** Parameterbereich [t0, t1] der Linie p→q außerhalb der Beschriftungsrahmen beider Atome */
+function clipParallelT(scene: Scene, b: Bond, p: Pt, q: Pt): [number, number] {
   const fs = scene.doc.style.fontSize
   const v = sub(q, p)
   let t0 = 0
@@ -161,8 +189,7 @@ export function clipParallel(scene: Scene, b: Bond, p: Pt, q: Pt): [Pt, Pt] {
   }
   t0 = exitT(b.a1, true)
   t1 = exitT(b.a2, false)
-  if (t1 <= t0) return [p, p]
-  return [add(p, mul(v, t0)), add(p, mul(v, t1))]
+  return [t0, t1]
 }
 
 /** Seite der Zweitlinie einer Doppelbindung: +1 = perp(dir), -1 = Gegenseite, 0 = zentriert */
