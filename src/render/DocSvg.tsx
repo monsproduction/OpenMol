@@ -1,4 +1,5 @@
 import { GhsIcon } from './Ghs'
+import { atomScale, bondScale, scaledStyle } from '../model/molscale'
 import { tableGeom } from '../model/stoichLayout'
 import { useId, type ReactElement } from 'react'
 import { boldStemWidth, isValenceError } from '../model/chem'
@@ -175,10 +176,12 @@ export function boldLineWidth(doc: Doc): number {
 
 export function bondLineWidth(doc: Doc, b: Bond): number {
   const st = doc.style
-  let lw = st.lineWidth * (b.width ?? 1)
+  // Größe des Moleküls (molscale): Linien wachsen mit
+  const k = bondScale(doc, b)
+  let lw = st.lineWidth * k * (b.width ?? 1)
   const A1 = doc.atoms[b.a1]
   const A2 = doc.atoms[b.a2]
-  if ((A1?.bold && A1.boldBonds) || (A2?.bold && A2.boldBonds)) lw = Math.max(lw, boldStemWidth(fontCss(st.font), st.fontSize))
+  if ((A1?.bold && A1.boldBonds) || (A2?.bold && A2.boldBonds)) lw = Math.max(lw, boldStemWidth(fontCss(st.font), st.fontSize * k))
   return lw
 }
 
@@ -194,7 +197,7 @@ function bondInner(scene: Scene, b: Bond) {
   const A1 = doc.atoms[b.a1]
   const A2 = doc.atoms[b.a2]
   const lw = bondLineWidth(doc, b)
-  const L = st.bondLength
+  const L = st.bondLength * bondScale(doc, b)
   const color = b.color ?? depthColor(scene, (A1.z ?? 0) / 2 + (A2.z ?? 0) / 2)
   const { p1, p2, c1, c2 } = bondEnds(scene, b)
   const v = sub(p2, p1)
@@ -315,7 +318,8 @@ function bondInner(scene: Scene, b: Bond) {
 
 function AtomShape({ scene, a }: { scene: Scene; a: Atom }) {
   const doc = scene.doc
-  const st = doc.style
+  // Größe des Moleküls (molscale): Schrift, Linien, Abstände wachsen mit
+  const st = scaledStyle(doc.style, atomScale(a))
   const fs = st.fontSize
   const d = scene.decor.get(a.id)
   if (!d) return null

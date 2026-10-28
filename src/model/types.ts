@@ -47,6 +47,8 @@ export interface Atom {
   showCip?: boolean
   /** manuell verschobene Stereo-Markierung (Versatz zum Atom) */
   stereoOff?: { x: number; y: number }
+  /** Größe des Moleküls (1 = 100 %; Linien und Schrift wachsen mit), siehe model/molscale.ts */
+  scale?: number
   /** Atomnummer für NMR-Zuordnungen („1“, „4a“, „2′“), klein neben dem Atom */
   num?: string
   /** manuell verschobene Atomnummer (Versatz zum Atom) */

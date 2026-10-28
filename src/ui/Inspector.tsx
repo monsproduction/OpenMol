@@ -17,6 +17,7 @@ import { isRichLabel, richPlain, richToSymbolGreek } from '../model/richtext'
 import { attachCycle, newArcLabel, newBranch, redistribute, stationHalfGaps, stationLabelSize } from '../model/cycle'
 import {
   arrange,
+  scaleMolecules,
   groupSelection,
   lockSelection,
   ungroupSelection,
@@ -338,6 +339,20 @@ export function Inspector() {
 
       {atoms.length > 0 && (
         <Section id="atom" title={atoms.length === 1 ? 'Atom' : `${atoms.length} Atome`}>
+          <Row label="Größe">
+            <NumSlider
+              min={25}
+              max={300}
+              step={5}
+              inputMin={10}
+              inputMax={1000}
+              digits={0}
+              unit="%"
+              value={Math.round((atoms[0].scale ?? 1) * 100)}
+              def={100}
+              onChange={(v) => scaleMolecules(v / 100)}
+            />
+          </Row>
           {atoms.length === 1 && (
             <Row label="Element / Label">
               {isRichLabel(atoms[0].label) ? (

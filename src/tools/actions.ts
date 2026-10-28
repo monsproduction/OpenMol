@@ -1,4 +1,5 @@
 // Befehle, die von Menüs, Tastenkürzeln und der Zeichenfläche gemeinsam genutzt werden.
+import { atomScale, setMolScale } from '../model/molscale'
 import { autoNumber } from '../model/numbering'
 import { countObjects, hasLocked, inGroup, lockItems, makeGroup, removeGroups, unlockAll, withoutLocked } from '../model/groups'
 import { linkTable } from '../model/reactionLink'
@@ -54,6 +55,17 @@ export function selectAll() {
       tables: Object.keys(d.tables ?? {}),
     }),
   })
+}
+
+// ---------- Größe von Molekülen ----------
+
+/** markierte Moleküle auf s (1 = 100 %) bringen – proportional: Bindungen, Linien und Schrift */
+export function scaleMolecules(s: number) {
+  const { doc, sel } = getState()
+  const ids = [...selectionAtomIds(doc, completeSel(doc, sel))]
+  if (!ids.length) return toast('Erst ein Molekül auswählen')
+  const k = Math.min(10, Math.max(0.1, s))
+  commit((d) => setMolScale(d, ids, k))
 }
 
 // ---------- Atomnummerierung (NMR-Zuordnung) ----------
@@ -333,6 +345,17 @@ export function cleanStructure() {
     for (const f of frs) {
       if (f.length < 2) continue
       const res = cleanCoordinates(doc, f)
+      // skaliertes Molekül (molscale): bereinigte Lage auf seine Größe strecken (um die Mitte)
+      const k = atomScale(doc.atoms[f[0]])
+      if (k !== 1 && res.size) {
+        let cx = 0
+        let cy = 0
+        for (const p of res.values()) {
+          cx += p.x / res.size
+          cy += p.y / res.size
+        }
+        for (const [id, p] of res) res.set(id, { x: cx + (p.x - cx) * k, y: cy + (p.y - cy) * k })
+      }
       // Sicherheitsnetz: nie ein Ergebnis übernehmen, das sich stärker überlappt als die bisherige Zeichnung
       const before = layoutFaults(doc, f, (id) => doc.atoms[id])
       const after = layoutFaults(doc, f, (id) => res.get(id) ?? doc.atoms[id])

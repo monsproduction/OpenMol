@@ -21,6 +21,7 @@ import {
   type Pt,
 } from './geom'
 import { tableGeom } from './stoichLayout'
+import { atomScale, scaledStyle } from './molscale'
 import type { Anchor, Arrow, Bond, CurvedArrow, Doc, Id, TextObj } from './types'
 
 export interface Scene {
@@ -51,7 +52,7 @@ export function getScene(doc: Doc): Scene {
   const decor = new Map<Id, AtomDecor>()
   // CIP-Deskriptoren nur berechnen, wenn sie angezeigt werden sollen
   const cip = doc.style.showCip || Object.values(doc.atoms).some((a) => a.showCip) ? stereoCenters(doc) : null
-  for (const id in doc.atoms) decor.set(id, atomDecor(g, doc.atoms[id], doc.style, cip?.get(id)))
+  for (const id in doc.atoms) decor.set(id, atomDecor(g, doc.atoms[id], scaledStyle(doc.style, atomScale(doc.atoms[id])), cip?.get(id)))
   const ringCenter = new Map<Id, Pt | null>()
   for (const id in doc.bonds) {
     const b = doc.bonds[id]
@@ -112,7 +113,7 @@ export function clipRadius(scene: Scene, atomId: Id, dir: Pt): number {
     }
     if (hi >= lo && hi < Infinity) r = Math.max(r, hi)
   }
-  return r + scene.doc.style.fontSize * 0.06
+  return r + scene.doc.style.fontSize * atomScale(scene.doc.atoms[atomId]) * 0.06
 }
 
 export function bondEnds(scene: Scene, b: Bond): { p1: Pt; p2: Pt; c1: number; c2: number } {
@@ -157,7 +158,7 @@ export function clipParallelSet(scene: Scene, b: Bond, lines: [Pt, Pt][]): [Pt, 
 
 /** Parameterbereich [t0, t1] der Linie p→q außerhalb der Beschriftungsrahmen beider Atome */
 function clipParallelT(scene: Scene, b: Bond, p: Pt, q: Pt): [number, number] {
-  const fs = scene.doc.style.fontSize
+  const fs0 = scene.doc.style.fontSize
   const v = sub(q, p)
   let t0 = 0
   let t1 = 1
@@ -165,6 +166,7 @@ function clipParallelT(scene: Scene, b: Bond, p: Pt, q: Pt): [number, number] {
     const d = scene.decor.get(atomId)
     if (!d?.label) return fromStart ? 0 : 1
     const a = scene.doc.atoms[atomId]
+    const fs = fs0 * atomScale(a)
     const hwR = (d.label.hwR ?? d.label.hw) + fs * 0.06
     const hwL = (d.label.hwL ?? d.label.hw) + fs * 0.06
     const hh = d.label.hh * 0.86 + fs * 0.06
@@ -257,7 +259,8 @@ function anchorClearance(scene: Scene, a: Anchor): number {
   const fs = scene.doc.style.fontSize
   if (a.type === 'atom') {
     const d = scene.decor.get(a.id)
-    return d?.label ? Math.max(d.label.hw, d.label.hh) + fs * 0.15 : fs * 0.3
+    const k = atomScale(scene.doc.atoms[a.id])
+    return d?.label ? Math.max(d.label.hw, d.label.hh) + fs * k * 0.15 : fs * k * 0.3
   }
   if (a.type === 'lp') return fs * 0.28
   if (a.type === 'bond') return fs * 0.15
@@ -510,14 +513,15 @@ export function sceneBBox(scene: Scene, only?: Partial<Record<keyof Doc, Set<Id>
     const a = doc.atoms[id]
     const d = scene.decor.get(id)
     const l = d?.label
+    const k = atomScale(a)
     box = unionBox(box, {
-      x1: a.x + (l ? l.left : -2) - (d?.lonePairs.length ? fs * 0.4 : 0),
-      y1: a.y + (l ? l.top : -2) - (d?.lonePairs.length || a.charge ? fs * 0.45 : 0),
-      x2: a.x + (l ? l.right : 2) + (a.charge ? fs * 0.6 : 0) + (d?.lonePairs.length ? fs * 0.4 : 0),
-      y2: a.y + (l ? l.bottom : 2) + (d?.lonePairs.length ? fs * 0.45 : 0),
+      x1: a.x + (l ? l.left : -2) - (d?.lonePairs.length ? fs * k * 0.4 : 0),
+      y1: a.y + (l ? l.top : -2) - (d?.lonePairs.length || a.charge ? fs * k * 0.45 : 0),
+      x2: a.x + (l ? l.right : 2) + (a.charge ? fs * k * 0.6 : 0) + (d?.lonePairs.length ? fs * k * 0.4 : 0),
+      y2: a.y + (l ? l.bottom : 2) + (d?.lonePairs.length ? fs * k * 0.45 : 0),
     })
     // Atomnummer (und Stereo-Markierung) gehören zum Bild – sonst schneidet der Export sie ab
-    for (const c of [d?.num?.c, d?.stereo?.c]) if (c) box = unionBox(box, { x1: c.x - fs * 0.45, y1: c.y - fs * 0.4, x2: c.x + fs * 0.45, y2: c.y + fs * 0.4 })
+    for (const c of [d?.num?.c, d?.stereo?.c]) if (c) box = unionBox(box, { x1: c.x - fs * k * 0.45, y1: c.y - fs * k * 0.4, x2: c.x + fs * k * 0.45, y2: c.y + fs * k * 0.4 })
   }
   for (const id in doc.bonds) {
     if (!want('bonds', id)) continue
