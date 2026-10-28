@@ -1,11 +1,11 @@
 import { StoichEditor } from './ui/StoichEditor'
-import { subscribeSettings, useSettings } from './settings'
+import { getSettings, subscribeSettings, useSettings } from './settings'
 import { startI18n } from './i18n/i18n'
 import { startAiBridge, stopAiBridge } from './tools/aiBridge'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { exampleCycle, exampleEsterification, exampleScheme, exampleSN2 } from './model/examples'
 import { Canvas } from './render/Canvas'
-import { getState, replaceDoc, setState, setTool, useStore } from './store'
+import { getState, replaceDoc, setState, setTool, toast, useStore } from './store'
 import { fitView } from './tools/actions'
 import { handleKeyDown, handlePaste } from './tools/keyboard'
 import { Dialogs, useFitOnFirstLoad } from './ui/Dialogs'
@@ -17,6 +17,9 @@ import { TabBar } from './ui/TabBar'
 import { Tooltip } from './ui/Tooltip'
 import { ContextMenu } from './ui/ContextMenu'
 import { desktop } from './desktop'
+import { loadRecent, recentDocs, type RecentDoc } from './recent'
+import { openText } from './tools/io'
+import { T } from './i18n/i18n'
 
 function Toast() {
   const t = useStore((s) => s.toast)
@@ -39,7 +42,21 @@ function EmptyState() {
       !Object.keys(s.doc.tables ?? {}).length,
   )
   const editing = useStore((s) => s.editing)
+  // zuletzt verwendete Dokumente statt der Beispiele (Beispiele nur, solange es noch keine gibt)
+  const [recent, setRecent] = useState<RecentDoc[]>([])
+  useEffect(() => {
+    if (empty) void recentDocs().then(setRecent)
+  }, [empty])
   if (!empty || editing) return null
+  const openRecentDoc = async (r: RecentDoc) => {
+    const f = await loadRecent(r)
+    if (!f) {
+      toast(T('Das Dokument ist nicht mehr vorhanden'), 'error')
+      setRecent(await recentDocs())
+      return
+    }
+    await openText(f.name, f.text, f.path)
+  }
   const load = (d: ReturnType<typeof exampleSN2>, name: string) => {
     replaceDoc(d, name)
     setTool('select')
@@ -60,6 +77,24 @@ function EmptyState() {
           <Icon name="template" size={18} /> Vorlage wählen
         </button>
       </div>
+      {recent.length > 0 ? (
+        <>
+          <p className="muted">Zuletzt verwendet:</p>
+          <div className="empty-actions recent">
+            {recent.map((r) => (
+              <button
+                key={(r.path ?? '') + r.name}
+                className="btn ghost"
+                data-tip={(r.path ?? r.name) + ' · ' + new Date(r.time).toLocaleString(getSettings().uiLang === 'en' ? 'en-GB' : 'de-DE')}
+                onClick={() => void openRecentDoc(r)}
+              >
+                <Icon name="open" size={15} /> {r.name.replace(/\.(openmol|json)$/i, '')}
+              </button>
+            ))}
+          </div>
+        </>
+      ) : (
+        <>
       <p className="muted">Beispiele:</p>
       <div className="empty-actions">
         <button className="btn ghost" onClick={() => load(exampleSN2(), 'SN2-Mechanismus')}>
@@ -75,6 +110,8 @@ function EmptyState() {
           Katalysezyklus
         </button>
       </div>
+        </>
+      )}
     </div>
   )
 }

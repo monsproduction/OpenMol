@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { resetDefaultStyle, saveDefaultStyle } from '../defaultStyle'
 import { AboutDialog } from './AboutDialog'
 import { SYMBOLS, elementCategory, ptPosition } from '../model/elements'
 import { nameToStructure, oclToFragment, parseStructure } from '../model/ocl'
@@ -543,6 +544,28 @@ function SettingsDialog() {
             Reihenfolge zurücksetzen
           </button>
         </SRow>
+
+        <h4 className="set-group">Neue Dokumente</h4>
+        <SRow
+          label="Standard-Dokumentstil"
+          tip="Neue Dokumente beginnen mit diesem Stil: Linienstärke, Schrift, Bindungslänge, Ladungen, Hintergrund, Seitenformat, Raster … Übernommen wird der Stil des gerade offenen Dokuments (Inspektor ▸ Dokument-Stil)."
+        >
+          <div className="set-btns">
+            <button
+              className="btn small"
+              onClick={() => {
+                saveDefaultStyle(getState().doc.style)
+                toast(T('Stil dieses Dokuments ist jetzt der Standard für neue Dokumente'))
+              }}
+            >
+              Stil dieses Dokuments übernehmen
+            </button>
+            <button className="btn small" disabled={!s.defaultStyle} onClick={() => resetDefaultStyle()}>
+              Zurücksetzen
+            </button>
+          </div>
+        </SRow>
+        <p className="muted small set-note">{s.defaultStyle ? 'Eigener Standard-Stil ist eingestellt.' : 'Neue Dokumente nutzen die Vorlage „Standard“.'}</p>
 
         <h4 className="set-group">Ansatztabellen</h4>
         <SRow

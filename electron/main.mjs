@@ -257,6 +257,19 @@ function registerIpc() {
     return readDoc(allow(r.filePaths[0]))
   })
 
+  // Zuletzt verwendete Dokumente: nur vorhandene Dateien; öffnen nur, was in der Liste steht
+  ipcMain.handle('openmol:recent', () =>
+    loadRecent()
+      .filter((x) => fs.existsSync(x.path))
+      .slice(0, 8)
+      .map((x) => ({ path: x.path, name: path.basename(x.path), time: x.time })),
+  )
+  ipcMain.handle('openmol:open-recent', async (_e, p) => {
+    const abs = path.resolve(String(p))
+    if (!loadRecent().some((x) => x.path === abs) || !fs.existsSync(abs)) return null
+    return readDoc(allow(abs))
+  })
+
   ipcMain.handle('openmol:read-path', async (_e, p) => {
     if (!allowed.has(path.resolve(p))) throw new Error('Datei nicht freigegeben')
     return readDoc(p)
@@ -347,7 +360,10 @@ function registerIpc() {
       // Windows/Linux: „Name* – OpenMol“
       win.setTitle(`${s.title || 'Unbenannt'}${s.dirty ? '*' : ''} – OpenMol`)
     }
-    if (s.path) app.addRecentDocument(s.path)
+    if (s.path) {
+      app.addRecentDocument(s.path)
+      addRecent(s.path)
+    }
   })
 
   ipcMain.on('openmol:close-ok', () => {
@@ -415,6 +431,28 @@ function registerIpc() {
     })
     return r.response
   })
+}
+
+// ---------- Zuletzt verwendete Dokumente (leere Zeichenfläche zeigt sie an) ----------
+
+const recentFile = () => path.join(app.getPath('userData'), 'recent.json')
+function loadRecent() {
+  try {
+    const j = JSON.parse(fs.readFileSync(recentFile(), 'utf8'))
+    return Array.isArray(j) ? j.filter((x) => typeof x?.path === 'string') : []
+  } catch {
+    return []
+  }
+}
+function addRecent(p) {
+  const abs = path.resolve(p)
+  const list = loadRecent().filter((x) => x.path !== abs)
+  list.unshift({ path: abs, time: Date.now() })
+  try {
+    fs.writeFileSync(recentFile(), JSON.stringify(list.slice(0, 12)))
+  } catch {
+    // nicht schreibbar – Liste ist nur eine Bequemlichkeit
+  }
 }
 
 async function readDoc(p) {

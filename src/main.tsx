@@ -11,10 +11,20 @@ import { startFileDrop } from './fileDrop'
 import { startSession } from './session'
 import { syncReactionLinks } from './model/reactionLink'
 import { pruneGroups } from './model/groups'
+import { newDoc } from './defaultStyle'
 
 // Nur in der Entwicklung: Zugriff für Tests über die Browser-Konsole
 if (import.meta.env.DEV) {
   ;(window as unknown as Record<string, unknown>).__app = { store, actions, scene, types }
+}
+
+// neue Dokumente mit dem Standard-Dokumentstil aus den Einstellungen; das Startdokument ebenso, solange es leer ist
+store.setNewDocFactory(newDoc)
+{
+  const st = store.getState()
+  const d = st.doc
+  const blank = !Object.keys(d.atoms).length && !Object.keys(d.texts).length && !Object.keys(d.arrows).length && !Object.keys(d.shapes).length && !Object.keys(d.tables ?? {}).length && !Object.keys(d.cycles ?? {}).length
+  if (blank && !st.filePath && !st.dirty) store.setState({ doc: newDoc() })
 }
 
 // bei jeder Änderung: Ansatztabellen mit verknüpftem Reaktionspfeil abgleichen, Gruppen/Sperrliste aufräumen

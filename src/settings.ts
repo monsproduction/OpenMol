@@ -13,6 +13,11 @@ export interface AppSettings {
   autoPubchem: boolean
   /** Desktop-App: beim Start (höchstens einmal am Tag) bei GitHub nach einer neuen Version fragen */
   autoUpdate: boolean
+  /**
+   * Standard-Dokumentstil für neue Dokumente (Linienstärke, Schrift, Seitenformat …); fehlt er, gilt die Vorlage
+   * „Standard“. Vom Seitenlayout zählen nur Format und Ausrichtung (die Seite legt sich um den Nullpunkt).
+   */
+  defaultStyle?: Record<string, unknown>
 }
 
 const KEY = 'openmol:settings'
@@ -29,6 +34,8 @@ function load(): AppSettings {
         uiLang: v.uiLang === 'en' ? 'en' : 'de',
         autoPubchem: v.autoPubchem !== false,
         autoUpdate: v.autoUpdate !== false,
+        // geprüft wird beim Anwenden (normalizeDoc)
+        defaultStyle: v.defaultStyle && typeof v.defaultStyle === 'object' && !Array.isArray(v.defaultStyle) ? (v.defaultStyle as Record<string, unknown>) : undefined,
       }
     }
   } catch {

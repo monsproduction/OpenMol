@@ -3,6 +3,7 @@ import { linearizeTriples, selectionAtomIds } from '../model/ops'
 import { analyze, smilesToName, stereoCenters } from '../model/ocl'
 import { isotopePattern } from '../model/isotopePattern'
 import { hasLocked, inGroup } from '../model/groups'
+import { saveDefaultStyle } from '../defaultStyle'
 import type { ArrowKind, ArrowRoute, BondType, Cycle, DocStyle, DoublePos, LayoutAids, Shape, ShapeKind } from '../model/types'
 import { CLOSED_SHAPES, FONTS, STYLE_PRESETS, emptySelection, selectionSize } from '../model/types'
 import type { FillStyle } from '../model/rings'
@@ -1207,6 +1208,16 @@ function DocSettings({ style, setStyle }: { style: DocStyle; setStyle: (p: Parti
         <input type="checkbox" checked={!!style.showCip} onChange={(e) => setStyle({ showCip: e.target.checked || undefined })} /> R/S an allen Stereozentren anzeigen
       </label>
       <LayoutAidsControls />
+      <button
+        className="btn small docstyle-default"
+        onClick={() => {
+          saveDefaultStyle(style)
+          toast('Stil dieses Dokuments ist jetzt der Standard für neue Dokumente')
+        }}
+        data-tip="Neue Dokumente beginnen mit diesem Stil (Einstellungen ▸ Neue Dokumente: zurücksetzen)"
+      >
+        Als Standard für neue Dokumente
+      </button>
     </Section>
   )
 }

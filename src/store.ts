@@ -308,6 +308,12 @@ document.addEventListener('visibilitychange', () => {
 const MAX_HISTORY = 200
 
 /** Änderung mit Undo-Eintrag */
+/** neues leeres Dokument (mit dem Standard-Dokumentstil aus den Einstellungen, siehe main.tsx) */
+let newDocFactory: () => Doc = emptyDoc
+export function setNewDocFactory(f: () => Doc) {
+  newDocFactory = f
+}
+
 /** läuft am Ende jedes commit im selben Schritt (gleicher Rückgängig-Schritt), z. B. Abgleich Pfeil ↔ Ansatztabelle */
 let commitHook: ((d: Doc) => void) | null = null
 export function setCommitHook(f: ((d: Doc) => void) | null) {
@@ -490,7 +496,7 @@ export function openTab(init: { doc?: Doc; fileName?: string; filePath?: string 
   const tabs = allTabs()
   const t: TabData = {
     id: uid('tab'),
-    doc: init.doc ?? emptyDoc(),
+    doc: init.doc ?? newDocFactory(),
     past: [],
     future: [],
     sel: emptySelection(),
@@ -526,7 +532,7 @@ export function removeTab(id: Id) {
   if (i < 0) return
   const tabs = all.filter((t) => t.id !== id)
   if (!tabs.length) {
-    const t: TabData = { id: uid('tab'), doc: emptyDoc(), past: [], future: [], sel: emptySelection(), view: state.view, fileName: 'Unbenannt', dirty: false, filePath: null }
+    const t: TabData = { id: uid('tab'), doc: newDocFactory(), past: [], future: [], sel: emptySelection(), view: state.view, fileName: 'Unbenannt', dirty: false, filePath: null }
     load([t], t)
   } else if (id === state.activeTab) load(tabs, tabs[Math.min(i, tabs.length - 1)])
   else {

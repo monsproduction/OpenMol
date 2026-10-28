@@ -2780,3 +2780,11 @@ code {
     padding: 0 8px;
   }
 }
+.set-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.docstyle-default {
+  margin-top: 10px;
+}

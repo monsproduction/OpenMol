@@ -1,4 +1,5 @@
 // Export/Import: SVG, PNG, Molfile, SMILES, eigenes JSON-Format
+import { rememberDoc } from '../recent'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { extractClip, selectionAtomIds } from '../model/ops'
@@ -382,6 +383,7 @@ export async function saveDocument(saveAs = false): Promise<boolean> {
   const base = fileName || 'Unbenannt'
   if (!desktop) {
     download(base + FILE_EXT, new Blob([docJson(doc)], { type: 'application/json' }))
+    rememberDoc(base, doc)
     setState({ dirty: false })
     toast('Gespeichert')
     return true
@@ -493,7 +495,9 @@ export async function openText(fname: string, text: string, path?: string) {
     // schon offen: zu diesem Tab wechseln
     const already = path ? allTabs().find((t) => t.filePath === path) : undefined
     if (already) return switchTab(already.id)
-    showDocument(normalizeDoc(d), name, path ?? null, false)
+    const nd = normalizeDoc(d)
+    rememberDoc(name, nd)
+    showDocument(nd, name, path ?? null, false)
     return
   }
   if (/\.cdxml$/i.test(fname)) {

@@ -45,6 +45,10 @@ export interface DesktopApi {
   openExternal: (url: string) => Promise<void>
   /** Lizenzen von Electron/Chromium (LICENSES.chromium.html) im Browser öffnen */
   openLicenses: () => Promise<void>
+  /** zuletzt verwendete Dokumente (vorhandene Dateien) */
+  recentDocs: () => Promise<{ path: string; name: string; time: number }[]>
+  /** Dokument aus der Liste der zuletzt verwendeten öffnen (null = nicht mehr vorhanden) */
+  openRecent: (path: string) => Promise<{ name: string; text: string; path: string } | null>
   confirm: (opts: { message: string; detail?: string; buttons?: string[]; cancelId?: number; type?: string }) => Promise<number>
   nativeEdit: (cmd: string) => void
   setUiLang: (l: string) => void
