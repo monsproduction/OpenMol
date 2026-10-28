@@ -1158,7 +1158,7 @@ function StoichTableEl({ doc, t }: { doc: Doc; t: StoichTable }) {
         c.ghs ? (
           <g key={'c' + i}>
             {c.ghs.map((code, k) => (
-              <GhsIcon key={code} code={code} x={c.x + k * c.ghsSize! * 1.02} y={c.y - c.ghsSize! * 0.7} size={c.ghsSize!} />
+              <GhsIcon key={code} code={code} x={c.x + k * c.ghsSize! * 1.02} y={c.y - c.ghsSize! * 0.7} size={c.ghsSize!} lang={t.lang} />
             ))}
           </g>
         ) : (

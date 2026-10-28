@@ -1970,7 +1970,7 @@ function LayoutAidsControls() {
       )}
       {nGuides > 0 && (
         <button className="btn small" onClick={() => set({ guidesX: undefined, guidesY: undefined })} data-tip="Alle Hilfslinien entfernen">
-          Hilfslinien löschen ({nGuides})
+          {`Hilfslinien löschen (${nGuides})`}
         </button>
       )}
     </div>

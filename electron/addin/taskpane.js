@@ -4,7 +4,8 @@
 'use strict'
 
 const $ = (id) => document.getElementById(id)
-const OM_RE = /OM1:[A-Za-z0-9_-]{16,}/
+// mit Endpunkt, wenn vorhanden (sonst können Zeichen der PNG-Prüfsumme anhängen; OpenMol schneidet sie dann ab)
+const OM_RE = /OM1:[A-Za-z0-9_-]{16,}\.?/
 
 // Texte in der Sprache der OpenMol-Oberfläche (kommt mit /api/ping; bis dahin die Sprache von Word)
 const TEXT = {
@@ -64,9 +65,11 @@ function latin1(b64) {
   return atob(b64)
 }
 
-/** natürliche Breite eines PNG in pt: Pixel und Auflösung (pHYs); ohne Angabe 96 dpi */
+/** natürliche Breite eines PNG in pt: Pixel und Auflösung (pHYs); ohne Angabe 96 dpi. null = kein PNG */
 function pngWidthPt(bin) {
+  if (!bin.startsWith('\x89PNG')) return null
   const px = ((bin.charCodeAt(16) << 24) | (bin.charCodeAt(17) << 16) | (bin.charCodeAt(18) << 8) | bin.charCodeAt(19)) >>> 0
+  if (!px) return null
   const i = bin.indexOf('pHYs')
   let dpi = 96
   if (i > 0 && bin.charCodeAt(i + 12) === 1) {
@@ -107,7 +110,8 @@ function titleFor(payload, widthPt) {
 }
 function widthFromTitle(title) {
   const m = / w=([\d.]+)/.exec(title ?? '')
-  return m ? Number(m[1]) : null
+  const w = m ? Number(m[1]) : NaN
+  return w > 0 ? w : null
 }
 
 /** auf das Ergebnis aus OpenMol warten (bis zu 2 Stunden) und das Bild ersetzen */
@@ -124,7 +128,6 @@ async function waitAndReplace(session, tag, scale, description) {
     }
     if (!j.ready) continue
     const natural = pngWidthPt(latin1(j.png))
-    const newWidth = natural * scale
     await Word.run(async (ctx) => {
       const ccs = ctx.document.contentControls.getByTag(tag)
       ccs.load('items')
@@ -134,11 +137,11 @@ async function waitAndReplace(session, tag, scale, description) {
       const old = cc.inlinePictures.getFirst()
       const pic = old.insertInlinePictureFromBase64(j.png, 'Replace')
       pic.lockAspectRatio = true
-      pic.width = newWidth
+      if (natural) pic.width = natural * scale
       // eine vorhandene Bildbeschreibung bleibt, sonst eine kurze eigene
       pic.altTextDescription = description || t('alt')
       const p = OM_RE.exec(latin1(j.png))?.[0]
-      if (p) pic.altTextTitle = titleFor(p, natural)
+      if (p) pic.altTextTitle = natural ? titleFor(p, natural) : p
       // Hülle wieder entfernen, das Bild bleibt
       cc.delete(true)
       await ctx.sync()
@@ -169,13 +172,13 @@ async function editSelected() {
       const inImage = OM_RE.exec(bin)?.[0] ?? null
       payload = inImage ?? OM_RE.exec(pic.altTextTitle ?? '')?.[0] ?? OM_RE.exec(pic.altTextDescription ?? '')?.[0] ?? null
       if (!payload) throw new Error(t('noData'))
-      // natürliche Breite: aus dem Original-PNG (Auflösung im Bild), sonst aus dem Titel
+      // natürliche Breite: aus dem Original-PNG (Auflösung im Bild), sonst aus dem Titel (null = unbekannt, z. B. JPEG)
       const natural = inImage ? pngWidthPt(bin) : (widthFromTitle(pic.altTextTitle) ?? pngWidthPt(bin))
-      // Maßstab merken, damit das neue Bild genauso groß gezeichnet erscheint
-      scale = pic.width / natural
+      // Maßstab merken, damit das neue Bild genauso groß gezeichnet erscheint; unbekannt → natürliche Größe
+      scale = natural && pic.width > 0 ? pic.width / natural : 1
       description = pic.altTextDescription ?? ''
       // Daten gleich doppelt ablegen: übersteht so auch spätere Bildbearbeitung in Word (Zuschneiden, Komprimieren)
-      if (!OM_RE.test(pic.altTextTitle ?? '')) pic.altTextTitle = titleFor(payload, natural)
+      if (!OM_RE.test(pic.altTextTitle ?? '')) pic.altTextTitle = natural ? titleFor(payload, natural) : payload
       // Bild markieren, um es später wiederzufinden (auch wenn die Auswahl inzwischen woanders ist)
       const cc = pic.insertContentControl()
       cc.tag = tag
@@ -184,6 +187,9 @@ async function editSelected() {
     })
     const { session } = await api('/api/edit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payload }) })
     status(t('opened'))
+    // schon jetzt wieder frei: ein anderes Bild bearbeiten oder es erneut versuchen, falls OpenMol ohne „Zurück nach
+    // Word“ geschlossen wurde (sonst wäre der Knopf bis zu 2 Stunden gesperrt)
+    $('edit').disabled = false
     await waitAndReplace(session, tag, scale, description)
   } catch (e) {
     status(e?.message ?? String(e), true)

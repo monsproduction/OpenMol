@@ -1,4 +1,5 @@
 import { useSettings } from '../settings'
+import { T } from '../i18n/i18n'
 import { withGroups, withoutLocked } from '../model/groups'
 import { memo, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { bestBondAngle, buildGraph, textWidth, type Graph } from '../model/chem'
@@ -2106,7 +2107,7 @@ function Rulers({ view, w, h, origin }: { view: { zoom: number; panX: number; pa
         {ticks('y', h)}
       </g>
       <rect x={0} y={0} width={RULER} height={RULER} className="ruler-corner">
-        <title>Lineale in cm – Hilfslinie herausziehen, zurück aufs Lineal ziehen zum Löschen</title>
+        <title>{T('Lineale in cm – Hilfslinie herausziehen, zurück aufs Lineal ziehen zum Löschen')}</title>
       </rect>
     </g>
   )
@@ -2140,10 +2141,10 @@ function PagePlusButtons({ page, view }: { page: PageLayout; view: View }) {
   const cy = (sy(b.y1) + sy(b.y2)) / 2
   const off = 30
   const spots: { side: 'top' | 'bottom' | 'left' | 'right'; x: number; y: number; tip: string }[] = [
-    { side: 'top', x: cx, y: sy(b.y1) - off, tip: 'Seite oben anbauen' },
-    { side: 'bottom', x: cx, y: sy(b.y2) + off, tip: 'Seite unten anbauen' },
-    { side: 'left', x: sx(b.x1) - off, y: cy, tip: 'Seite links anbauen' },
-    { side: 'right', x: sx(b.x2) + off, y: cy, tip: 'Seite rechts anbauen' },
+    { side: 'top', x: cx, y: sy(b.y1) - off, tip: T('Seite oben anbauen') },
+    { side: 'bottom', x: cx, y: sy(b.y2) + off, tip: T('Seite unten anbauen') },
+    { side: 'left', x: sx(b.x1) - off, y: cy, tip: T('Seite links anbauen') },
+    { side: 'right', x: sx(b.x2) + off, y: cy, tip: T('Seite rechts anbauen') },
   ]
   return (
     <g className="page-plus">

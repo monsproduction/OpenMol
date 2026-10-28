@@ -169,7 +169,7 @@ function UnitSel({ kind, value, chosen, auto, onChange }: { kind: QtyKind; value
 const Unit = ({ u }: { u: string }) => <span className="st-u">{u}</span>
 
 export function StoichEditor() {
-  useSettings()
+  const uiLang = useSettings().uiLang
   const id = useStore((s) => s.tableEditor)
   const doc = useStore((s) => s.doc)
   const t = id ? doc.tables?.[id] : undefined
@@ -284,7 +284,7 @@ export function StoichEditor() {
       <span className="st-ghs">
         {r.ghs.map((code) => (
           <svg key={code} width={24} height={24} viewBox="0 0 20 20" data-tip={`${GHS_NAMES[code] ?? code}${r.ghsSource ? ' · Quelle: ' + r.ghsSource + ' (laut PubChem)' : ''}`}>
-            <GhsIcon code={code} x={0} y={0} size={20} />
+            <GhsIcon code={code} x={0} y={0} size={20} lang={uiLang} />
           </svg>
         ))}
       </span>

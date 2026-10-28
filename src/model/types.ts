@@ -598,6 +598,23 @@ export function emptyDoc(): Doc {
 }
 
 /**
+ * Größe (molscale), Atomnummer und von Hand gesetzte Versätze eines Atoms prüfen – beim Öffnen von Dateien und bei
+ * Änderungen über die KI-Steuerung (edit_objects); unsinnige Werte fallen weg
+ */
+export function cleanAtomExtras(a: Atom) {
+  const ok = (n: unknown) => typeof n === 'number' && Number.isFinite(n)
+  if (a.scale !== undefined && !(ok(a.scale) && a.scale >= 0.05 && a.scale <= 20)) delete a.scale
+  if (a.num !== undefined && (typeof a.num !== 'string' || !a.num.trim())) {
+    if (typeof a.num === 'number' && ok(a.num)) a.num = String(a.num)
+    else delete a.num
+  }
+  for (const k of ['chargeOff', 'partialOff', 'stereoOff', 'numOff'] as const) {
+    const o = a[k] as unknown as { x?: unknown; y?: unknown } | undefined
+    if (o !== undefined && !(o && ok(o.x) && ok(o.y))) delete a[k]
+  }
+}
+
+/**
  * Geladenes Dokument (Datei, Autosave) absichern: fehlende Bereiche ergänzen, Bindungen ohne Atome,
  * Atome ohne gültige Koordinaten und Ringfüllungen mit fehlenden Atomen entfernen, Zyklus-Radien begrenzen.
  */
@@ -775,16 +792,7 @@ export function normalizeDoc(raw: Partial<Doc>): Doc {
     const offs = (v?: ({ x: number; y: number } | null)[]) => v?.map((o) => (o && ok(o.x) && ok(o.y) ? o : null))
     if (a.lpOff) a.lpOff = offs(a.lpOff)
     if (a.radOff) a.radOff = offs(a.radOff)
-    // Größe des Moleküls (molscale) und Atomnummer: nur sinnvolle Werte
-    if (a.scale !== undefined && !(ok(a.scale) && a.scale >= 0.05 && a.scale <= 20)) delete a.scale
-    if (a.num !== undefined && (typeof a.num !== 'string' || !a.num.trim())) {
-      if (typeof a.num === 'number' && ok(a.num)) a.num = String(a.num)
-      else delete a.num
-    }
-    for (const k of ['chargeOff', 'partialOff', 'stereoOff', 'numOff'] as const) {
-      const o = a[k]
-      if (o !== undefined && !(o && ok(o.x) && ok(o.y))) delete a[k]
-    }
+    cleanAtomExtras(a)
   }
   const anchorOk = (an?: Anchor) =>
     !!an && (an.type === 'point' ? ok(an.x) && ok(an.y) : an.type === 'bond' ? !!d.bonds[an.id] : !!d.atoms[an.id])

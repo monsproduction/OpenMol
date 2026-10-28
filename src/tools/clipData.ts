@@ -98,5 +98,6 @@ export async function decodeClipPayload(payload: string): Promise<ClipData | nul
 
 /** erstes „OM1:…“ in einem Text (HTML, Bilddaten als Latin-1 gelesen …) */
 export function findClipPayload(text: string): string | null {
-  return /OM1:[A-Za-z0-9_-]{16,}/.exec(text)?.[0] ?? null
+  // mit Endpunkt, wenn vorhanden – sonst hängen an Bilddaten u. U. Zeichen der PNG-Prüfsumme an
+  return /OM1:[A-Za-z0-9_-]{16,}\.?/.exec(text)?.[0] ?? null
 }

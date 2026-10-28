@@ -11,12 +11,15 @@ import { getScene, sceneBBox } from '../model/scene'
 import { buildCdxml } from '../tools/cdxml'
 import { importCdxml } from '../tools/cdxmlImport'
 import { decodeClipFull, encodeClipPayload } from '../tools/clipData'
-import { exportSvgString, pdfHtml } from '../tools/io'
-import { commit, getState, redo, replaceDoc, setState, undo } from '../store'
+import { exportSvgString, imageWithClipData, pdfHtml, renderPng } from '../tools/io'
+import { commit, getState, openTab, redo, replaceDoc, setState, switchTab, undo } from '../store'
+import { lsGet } from '../storage'
+import { __runTool } from '../tools/aiBridge'
 import {
   autoNumberAtoms,
   cleanStructure,
   completeSel,
+  deleteSelection,
   duplicateSelection,
   flip,
   rotate,
@@ -460,4 +463,203 @@ export async function run2(): Promise<string[]> {
     const back = normalizeDoc(JSON.parse(JSON.stringify(doc())))
     check(name + ': Datei-Rundreise', Object.keys(back.atoms).length === Object.keys(doc().atoms).length)
   }
+}
+
+/**
+ * Dritte Welle: Zufallsfolgen (300 Aktionen mit Rückgängig/Wiederholen) mit Stimmigkeitsprüfung nach jedem Schritt,
+ * Tabs, automatische Sicherung, Tempo bei großen Dokumenten, PNG mit Verläufen, KI-Steuerung.
+ * Im Browser: (await import('/src/dev/featureTests.ts')).run3()
+ */
+export async function run3(seed = 7): Promise<string[]> {
+  const R: string[] = []
+  const fail = (name: string, msg: unknown) => R.length < 40 && R.push(`${name}: ${msg instanceof Error ? msg.message : String(msg)}`)
+  const check = (name: string, ok: boolean, info: unknown = '') => {
+    if (!ok) fail(name, typeof info === 'string' ? info || 'falsch' : JSON.stringify(info).slice(0, 300))
+  }
+  const T = async (name: string, f: () => unknown) => {
+    try {
+      await f()
+    } catch (e) {
+      fail(name + ' (Ausnahme)', (e as Error)?.stack?.split('\n').slice(0, 3).join(' | ') ?? e)
+    }
+  }
+  const doc = () => getState().doc
+  // reproduzierbarer Zufall
+  let s = seed
+  const rnd = () => ((s = (s * 1103515245 + 12345) % 2147483648) / 2147483648)
+  const pick = <X,>(xs: X[]): X => xs[Math.floor(rnd() * xs.length)]
+
+  /** Stimmigkeit: endliche Koordinaten, Verweise von Gruppen/Sperren/Verläufen/Tabellen zeigen auf Vorhandenes */
+  const consistent = (step: string) => {
+    const d = doc()
+    for (const a of Object.values(d.atoms))
+      if (![a.x, a.y, a.scale ?? 1].every(Number.isFinite)) return fail(step + ': Atom nicht endlich', a)
+    for (const b of Object.values(d.bonds)) if (!d.atoms[b.a1] || !d.atoms[b.a2]) return fail(step + ': Bindung ohne Atom', b)
+    const kinds = ['atoms', 'bonds', 'arrows', 'curved', 'texts', 'shapes', 'fills', 'cycles', 'tables'] as const
+    for (const g of Object.values(d.groups ?? {}))
+      for (const k of kinds) for (const id of g.items[k] ?? []) if (!d[k][id]) return fail(step + ': Gruppe zeigt ins Leere', [k, id])
+    for (const k of kinds) for (const id of d.locked?.[k] ?? []) if (!d[k][id]) return fail(step + ': Sperre zeigt ins Leere', [k, id])
+    for (const k of ['atoms', 'bonds', 'arrows', 'texts'] as const)
+      for (const o of Object.values(d[k]) as { color?: string; highlight?: string }[])
+        for (const c of [o.color, o.highlight]) if (c?.startsWith('grad:') && !d.gradients?.[c.slice(5)]) return fail(step + ': Verlauf fehlt', c)
+    for (const id of Object.keys(d.gradients ?? {})) {
+      const used = (['atoms', 'bonds', 'arrows', 'curved', 'texts', 'shapes', 'cycles'] as const).some((k) =>
+        (Object.values(d[k] ?? {}) as { color?: string; highlight?: string }[]).some((o) => o?.color === 'grad:' + id || o?.highlight === 'grad:' + id),
+      )
+      if (!used) return fail(step + ': unbenutzter Verlauf bleibt liegen', id)
+    }
+    const sv = exportSvgString(d)?.svg ?? ''
+    if (sv.includes('NaN')) return fail(step + ': SVG mit NaN', '')
+  }
+
+  await T('Zufallsfolge', async () => {
+    replaceDoc(emptyDoc(), 'Zufall')
+    const smiles = ['c1ccccc1', 'CCO', 'O=C(O)C', 'C1CCNCC1', 'N#CC', 'c1ccncc1C(=O)O']
+    const actions: [string, () => unknown][] = [
+      ['Struktur', () => insertStructureText(pick(smiles), { x: rnd() * 600 - 300, y: rnd() * 400 - 200 })],
+      ['Text', () => commit((d) => void (d.texts['t' + Math.floor(rnd() * 1e9)] = { id: 'x', x: rnd() * 300, y: rnd() * 300, text: 'T', size: 14 }))],
+      ['alles', () => selectAll()],
+      ['Teil', () => {
+        const ids = Object.keys(doc().atoms)
+        setState({ sel: completeSel(doc(), { ...emptySelection(), atoms: ids.filter(() => rnd() < 0.3), texts: Object.keys(doc().texts).filter(() => rnd() < 0.5) }) })
+      }],
+      ['nichts', () => setState({ sel: emptySelection() })],
+      ['Größe', () => scaleMolecules(pick([0.5, 1, 1.5, 3]))],
+      ['Gruppe', () => groupSelection()],
+      ['Gruppe lösen', () => ungroupSelection()],
+      ['Sperren', () => lockSelection()],
+      ['Entsperren', () => unlockEverything()],
+      ['Verlauf', () => setGradient(pick(['color', 'highlight'] as const), pick([null, { c1: '#ff0000', c2: '#0000ff', grad: 'linear' as const, angle: 45 }]))],
+      ['Nummern', () => autoNumberAtoms()],
+      ['Drehen', () => rotate(pick([15, 90, -30]))],
+      ['Spiegeln', () => flip(pick(['h', 'v'] as const))],
+      ['Duplizieren', () => duplicateSelection()],
+      ['Löschen', () => deleteSelection()],
+      ['Aufräumen', () => cleanStructure()],
+      ['Rückgängig', () => undo()],
+      ['Rückgängig', () => undo()],
+      ['Wiederholen', () => redo()],
+    ]
+    for (let i = 0; i < 300; i++) {
+      const [name, f] = pick(actions)
+      try {
+        await f()
+      } catch (e) {
+        fail(`Schritt ${i} ${name} (Ausnahme)`, e)
+      }
+      consistent(`Schritt ${i} ${name}`)
+      // Datei-Rundreise bleibt gleich
+      if (i % 25 === 0) {
+        const back = normalizeDoc(JSON.parse(JSON.stringify(doc())))
+        check(`Schritt ${i}: Rundreise`, JSON.stringify(back.atoms) === JSON.stringify(doc().atoms))
+      }
+    }
+  })
+
+  await T('Tabs behalten Gruppen, Verläufe, Größe', async () => {
+    replaceDoc(emptyDoc(), 'Tab A')
+    await insertStructureText('c1ccccc1O')
+    commit((d) => void (d.texts.t = { id: 't', x: 0, y: 90, text: 'A', size: 14 }))
+    selectAll()
+    scaleMolecules(2)
+    groupSelection()
+    setGradient('color', { c1: '#ff0000', c2: '#0000ff', grad: 'linear', angle: 0 })
+    autoNumberAtoms()
+    const before = JSON.stringify(doc())
+    const tabA = getState().activeTab
+    openTab()
+    await insertStructureText('CCO')
+    switchTab(tabA)
+    check('Tab A unverändert', JSON.stringify(doc()) === before)
+    undo()
+    check('Rückgängig im richtigen Tab', JSON.stringify(doc()) !== before)
+    redo()
+  })
+
+  await T('automatische Sicherung', async () => {
+    await new Promise((r) => setTimeout(r, 1500))
+    const raw = lsGet('openmol:autosave')
+    const saved = raw ? normalizeDoc((JSON.parse(raw).doc ?? JSON.parse(raw)) as Doc) : null
+    check('Sicherung enthält Verläufe/Gruppen/Größe', !!saved && !!saved.gradients && !!saved.groups && Object.values(saved.atoms).some((a) => a.scale === 2), raw?.slice(0, 120))
+  })
+
+  await T('Tempo bei großem Dokument', async () => {
+    const d = emptyDoc()
+    let n = 0
+    for (let r = 0; r < 40; r++)
+      for (let c = 0; c < 60; c++) {
+        const id = `a${r}_${c}`
+        d.atoms[id] = { id, x: c * 40, y: r * 40, element: 'C', charge: 0, radical: 0, lonePairs: 0, scale: r % 2 ? 1.5 : undefined }
+        if (c) d.bonds['b' + n++] = { id: 'b' + n, a1: `a${r}_${c - 1}`, a2: id, type: 'single', doublePos: 'auto' }
+      }
+    replaceDoc(normalizeDoc(d), 'Groß')
+    selectAll()
+    setGradient('color', { c1: '#000000', c2: '#ff00ff', grad: 'linear', angle: 20 })
+    groupSelection()
+    let t0 = performance.now()
+    commit((dd) => void (dd.atoms.a0_0.color = '#ff0000'))
+    const tCommit = performance.now() - t0
+    t0 = performance.now()
+    exportSvgString(doc())
+    const tSvg = performance.now() - t0
+    check('Änderung an 2400 Atomen schnell (<250 ms)', tCommit < 250, Math.round(tCommit) + ' ms')
+    check('SVG von 2400 Atomen (<3 s)', tSvg < 3000, Math.round(tSvg) + ' ms')
+  })
+
+  await T('PNG mit Verlauf und Größe', async () => {
+    replaceDoc(emptyDoc(), 'PNG')
+    await insertStructureText('c1ccccc1N')
+    selectAll()
+    scaleMolecules(2)
+    setGradient('color', { c1: '#ff0000', c2: '#0000ff', grad: 'radial', angle: 0 })
+    const b = await renderPng(false, 2, false)
+    check('PNG erzeugt', !!b && b.size > 1000, b?.size)
+    const r = await imageWithClipData(true)
+    const back = r ? await decodeClipFull(r.payload) : null
+    check('Bilddaten tragen Verlauf und Größe', !!back && (back.clip.gradients?.length ?? 0) === 1 && back.clip.atoms.every((a) => a.scale === 2))
+  })
+
+  await T('KI-Steuerung mit neuen Objekten', async () => {
+    const out: unknown[] = []
+    for (const [name, args] of [
+      ['get_document', {}],
+      ['export', { format: 'svg' }],
+      ['export', { format: 'cdxml' }],
+      ['export', { format: 'smiles' }],
+      ['get_document_json', {}],
+      ['clean_structures', {}],
+      ['undo', {}],
+    ] as const) {
+      try {
+        out.push(await __runTool(name, args as never))
+      } catch (e) {
+        fail('KI ' + name, e)
+      }
+    }
+    const txt = JSON.stringify(out)
+    const gids = [...txt.matchAll(/grad:([A-Za-z0-9_-]+)/g)].map((m) => m[1])
+    check('KI-Antworten ohne NaN, Verläufe auflösbar', !txt.includes('NaN') && gids.every((g) => !!doc().gradients?.[g]), gids.join(','))
+  })
+
+  await T('KI-Änderungen mit unsinnigen Werten', async () => {
+    replaceDoc(emptyDoc(), 'KI-Werte')
+    await insertStructureText('CCO')
+    const id = Object.keys(doc().atoms)[0]
+    for (const data of [{ scale: -1 }, { scale: 'riesig' }, { scale: 1e9 }, { num: 5 }, { num: {} }, { numOff: { x: 'a' } }, { chargeOff: null }, { color: 'grad:gibtsnicht' }]) {
+      try {
+        await __runTool('edit_objects', { operations: [{ op: 'update', kind: 'atoms', id, data }] } as never)
+      } catch (e) {
+        fail('edit_objects ' + JSON.stringify(data), e)
+      }
+      const svg = exportSvgString(doc())?.svg ?? ''
+      check('kein NaN nach ' + JSON.stringify(data), !svg.includes('NaN'))
+    }
+    const a = doc().atoms[id]
+    check('Werte bereinigt', a.scale === undefined && a.num === undefined && a.numOff === undefined && a.chargeOff === undefined && a.color === undefined, JSON.stringify(a))
+    await __runTool('edit_objects', { operations: [{ op: 'update', kind: 'atoms', id, data: { num: 5 } }] } as never)
+    check('Zahl als Nummer → Text', doc().atoms[id].num === '5')
+  })
+
+  setState({ sel: emptySelection() })
+  return R
 }

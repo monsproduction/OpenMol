@@ -33,11 +33,11 @@ const ATTRS = ['title', 'data-tip', 'placeholder', 'aria-label'] as const
 
 // Wörterbuch: exakte Texte und Muster mit Platzhaltern {0}, {1} …
 const exact = new Map<string, string>(Object.entries(EN))
-const patterns: { re: RegExp; out: string }[] = []
+const patterns: { re: RegExp; out: string }[] = [] // out mit Platzhaltern {0}, {1} …
 const esc = (s: string) => s.replace(/[.*+?^$()|[\]\\]/g, '\\$&').replace(/[{}]/g, (c) => '\\' + c)
 for (const [de, en] of Object.entries(EN_PATTERNS)) {
   const re = new RegExp('^' + esc(de).replace(/\\\{(\d)\\\}/g, '(.*?)') + '$', 's')
-  patterns.push({ re, out: en.replace(/\{(\d)\}/g, (_m, i) => '$' + (Number(i) + 1)) })
+  patterns.push({ re, out: en })
 }
 
 /** Übersetzung eines Oberflächentextes ins Englische (null = keine vorhanden) */
@@ -47,11 +47,17 @@ function translate(s: string): string | null {
   const core = m[2]
   let out = exact.get(core) ?? null
   if (out === null) {
-    for (const p of patterns)
-      if (p.re.test(core)) {
-        out = core.replace(p.re, p.out)
+    for (const p of patterns) {
+      const g = p.re.exec(core)
+      if (g) {
+        // eingesetzte Teile mit übersetzen, wenn es sie im Wörterbuch gibt („Textmarker Grün – …“)
+        out = p.out.replace(/\{(\d)\}/g, (_m, i) => {
+          const part = g[Number(i) + 1] ?? ''
+          return exact.get(part) ?? part
+        })
         break
       }
+    }
   }
   if (out === null) {
     // Werkzeugname mit Tastenkürzel: „Ringe  (R)“, „Einpassen (⌘0)“
@@ -179,7 +185,9 @@ function apply(lang: 'de' | 'en') {
   if (active && !observer) {
     observer = new MutationObserver((records) => {
       for (const r of records) {
-        if (r.target instanceof SVGElement || (r.target.parentNode instanceof SVGElement && r.type !== 'attributes')) continue
+        // in Zeichnungen nichts anfassen – außer geänderten Tooltips eines <svg> selbst (z. B. GHS-Symbol, Quelle kommt nach)
+        const svgRoot = r.type === 'attributes' && (r.target as Element).tagName?.toLowerCase() === 'svg'
+        if ((r.target instanceof SVGElement && !svgRoot) || (r.target.parentNode instanceof SVGElement && r.type !== 'attributes')) continue
         if (r.type === 'characterData') doText(r.target as Text, current === 'en')
         else if (r.type === 'attributes') doAttrs(r.target as Element, current === 'en')
         else r.addedNodes.forEach((n) => walk(n, current === 'en'))

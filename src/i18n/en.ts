@@ -1103,6 +1103,13 @@ export const EN: Record<string, string> = {
   'Kategorien lassen sich an ihrer Überschrift verschieben (ziehen oder ⌥↑ / ⌥↓).': 'Categories can be moved by their heading (drag, or ⌥↑ / ⌥↓).',
   '● Verbunden – eine KI-Anwendung kann die Zeichnung bearbeiten (alles mit ⌘Z rückgängig).': '● Connected – an AI application can edit the drawing (everything can be undone with ⌘Z).',
   '○ Warte auf eine KI-Anwendung – Einrichtung über „Prompt für die KI kopieren“.': '○ Waiting for an AI application – set it up via “Copy prompt for the AI”.',
+  'Verlauf hinzufügen': 'Add gradient',
+  'Farbverlauf über die ganze Auswahl (z. B. das markierte Molekül)': 'Colour gradient across the whole selection (e.g. the selected molecule)',
+  'Verlauf entfernen (zurück zur ersten Farbe)': 'Remove gradient (back to the first colour)',
+  'Verlauf entfernen': 'Remove gradient',
+  'Element wählen und dann auf ein Atom klicken. Schneller: Maus über ein Atom halten und das Elementsymbol tippen (z. B. N, O, S; l = Cl, b = Br). Andere Buchstaben (z. B. R) werden direkt als Beschriftung gesetzt.':
+    'Choose an element, then click an atom. Faster: hover over an atom and type the element symbol (e.g. N, O, S; l = Cl, b = Br). Other letters (e.g. R) are set directly as a label.',
+  'Textmarker-Verlauf': 'Highlighter gradient',
 }
 
 export const EN_PATTERNS: Record<string, string> = {
@@ -1169,6 +1176,7 @@ export const EN_PATTERNS: Record<string, string> = {
   'Summenformel: {0}': 'Formula: {0}',
   '{0} M{1}': '{0} M{1}',
   'Station {0} (optional)': 'Station {0} (optional)',
+  'Hilfslinien löschen ({0})': 'Delete guides ({0})',
 }
 
 // Platzhalter-Varianten, die in EN nicht als eigene Schlüssel stehen sollen (Hilfseinträge oben mit „_“): entfernen

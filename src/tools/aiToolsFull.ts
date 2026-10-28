@@ -1,6 +1,8 @@
 // Vollständige Steuerung für Claude (MCP): Datenmodell lesen, beliebige Objekte anlegen/ändern/löschen, Auswahl,
 // alle App-Aktionen sowie Spezialwerkzeuge (Katalysezyklus, Ringfüllung, Atome/Bindungen, Mechanismuspfeile,
 // Formen, Vorlagen, Stil). Wird von aiBridge.ts für alle Werkzeuge aufgerufen, die dort nicht direkt behandelt werden.
+import { dropDanglingGradients } from '../model/gradients'
+import { cleanAtomExtras } from '../model/types'
 import typesSource from '../model/types.ts?raw'
 import { buildGraph, fragments } from '../model/chem'
 import { newArcLabel, newBranch, newCycle } from '../model/cycle'
@@ -90,6 +92,7 @@ function repair(d: Doc) {
     if (typeof a.radical !== 'number') a.radical = 0
     if (typeof a.lonePairs !== 'number') a.lonePairs = 0
     if (!Number.isFinite(a.x) || !Number.isFinite(a.y)) delete d.atoms[id]
+    else cleanAtomExtras(a)
   }
   for (const id in d.bonds) {
     const b = d.bonds[id]
@@ -113,6 +116,7 @@ function repair(d: Doc) {
   }
   for (const k of ['arrows', 'texts', 'shapes', 'cycles', 'tables'] as const) for (const id in d[k]) (d[k][id] as { id: string }).id = id
   for (const t of Object.values(d.tables ?? {})) for (const r of t.rows) if (!r.id) r.id = uid('sr')
+  dropDanglingGradients(d)
 }
 
 /** Standardwerte beim Anlegen */
@@ -206,6 +210,8 @@ export async function runFullTool(name: string, a: Args): Promise<unknown | unde
         const all = (d[k] ?? {}) as Record<string, unknown>
         out[k] = ids ? Object.fromEntries(Object.entries(all).filter(([id]) => ids.has(id))) : all
       }
+      // Farben „grad:<id>“ verweisen auf diese Verläufe
+      if (d.gradients) out.gradients = d.gradients
       out.selection = getState().sel
       return json(out)
     }

@@ -34,6 +34,12 @@ function* refs(doc: Doc): Generator<{ kind: (typeof KINDS)[number]; id: Id; fiel
     }
 }
 
+/** Verweise auf nicht vorhandene Verläufe entfernen (Objekt bekommt wieder die Standardfarbe) */
+export function dropDanglingGradients(d: Doc) {
+  for (const r of [...refs(d)])
+    if (!d.gradients?.[r.gid]) delete (d[r.kind] as Record<Id, { color?: string; highlight?: string }>)[r.id][r.field]
+}
+
 /** nach jeder Änderung: nicht mehr verwendete Verläufe entfernen */
 export function pruneGradients(d: Doc) {
   if (!d.gradients) return
