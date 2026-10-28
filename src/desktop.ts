@@ -22,7 +22,17 @@ export interface McpInfo {
 export interface DesktopApi {
   isDesktop: true
   platform: string
-  store: { all: () => Record<string, string>; set: (key: string, value: string | null) => void; dir: () => string }
+  store: {
+    all: () => Record<string, string>
+    set: (key: string, value: string | null) => void
+    dir: () => string
+    /** Ort der eigenen Sammlungen (dir = null: App-Ordner) */
+    libraryLocation: () => Promise<{ dir: string | null; path: string }>
+    /** Ordner wählen (reset: zurück in den App-Ordner); null = abgebrochen */
+    chooseLibrary: (reset?: boolean) => Promise<{ dir: string | null; path: string; values: Record<string, string> } | null>
+    /** Werte wurden außerhalb geändert (Sammlungen aus dem Cloud-Ordner) */
+    onReload: (cb: (key: string, value: string) => void) => void
+  }
   openDialog: (opts?: { title?: string; filters?: FileFilter[] }) => Promise<DesktopFile | null>
   readPath: (p: string) => Promise<DesktopFile>
   saveDialog: (opts?: { title?: string; defaultPath?: string; filters?: FileFilter[] }) => Promise<string | null>

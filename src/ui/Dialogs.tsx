@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { resetDefaultStyle, saveDefaultStyle } from '../defaultStyle'
+import { applyExternal } from '../storage'
 import { AboutDialog } from './AboutDialog'
 import { SYMBOLS, elementCategory, ptPosition } from '../model/elements'
 import { nameToStructure, oclToFragment, parseStructure } from '../model/ocl'
@@ -567,6 +568,8 @@ function SettingsDialog() {
         </SRow>
         <p className="muted small set-note">{s.defaultStyle ? 'Eigener Standard-Stil ist eingestellt.' : 'Neue Dokumente nutzen die Vorlage „Standard“.'}</p>
 
+        {desktop && <LibraryLocation />}
+
         <h4 className="set-group">Ansatztabellen</h4>
         <SRow
           label="CAS & GHS aus PubChem"
@@ -915,4 +918,39 @@ export function useFitOnFirstLoad() {
     const d = getState().doc
     if (Object.keys(d.atoms).length) setTimeout(() => fitView(1.5), 50)
   }, [])
+}
+
+/** Ort der eigenen Sammlungen (Desktop): App-Ordner oder ein eigener, z. B. synchronisierter Cloud-Ordner */
+function LibraryLocation() {
+  const [loc, setLoc] = useState<{ dir: string | null; path: string } | null>(null)
+  useEffect(() => {
+    void desktop?.store.libraryLocation().then(setLoc)
+  }, [])
+  const choose = async (reset: boolean) => {
+    const r = await desktop?.store.chooseLibrary(reset)
+    if (!r) return
+    // zusammengeführte Sammlungen übernehmen
+    for (const [k, v] of Object.entries(r.values)) applyExternal(k, v)
+    setLoc({ dir: r.dir, path: r.path })
+    toast(reset ? T('Eigene Sammlungen liegen wieder im App-Ordner') : T('Eigene Sammlungen liegen jetzt im gewählten Ordner'))
+  }
+  return (
+    <>
+      <h4 className="set-group">Eigene Sammlungen</h4>
+      <SRow
+        label="Speicherort"
+        tip="Liegt der Ordner in iCloud, Dropbox, OneDrive o. Ä., sind die Sammlungen auf allen Rechnern gleich (dort denselben Ordner wählen). Liegen dort schon Sammlungen, werden sie mit den vorhandenen zusammengeführt. Ändern zwei Rechner gleichzeitig, gilt die zuletzt gespeicherte Fassung."
+      >
+        <div className="set-btns">
+          <button className="btn small" onClick={() => void choose(false)}>
+            Ordner wählen …
+          </button>
+          <button className="btn small" disabled={!loc?.dir} onClick={() => void choose(true)}>
+            App-Ordner
+          </button>
+        </div>
+      </SRow>
+      <p className="muted small set-note set-path">{loc ? loc.path : '…'}</p>
+    </>
+  )
 }

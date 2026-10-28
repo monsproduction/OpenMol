@@ -51,3 +51,21 @@ export function lsSet(key: string, value: string) {
     // Speicher voll oder gesperrt
   }
 }
+
+// ---------- außerhalb geänderte Werte (Sammlungen im Cloud-Ordner, Ortswechsel) ----------
+
+const reloadListeners = new Set<(key: string) => void>()
+
+/** Wert übernehmen, der außerhalb der Oberfläche geändert wurde, und Interessenten benachrichtigen */
+export function applyExternal(key: string, value: string) {
+  if (!fileStore) return
+  fileStore[key] = value
+  for (const l of reloadListeners) l(key)
+}
+
+export function onExternalChange(cb: (key: string) => void): () => void {
+  reloadListeners.add(cb)
+  return () => reloadListeners.delete(cb)
+}
+
+if (desktop) desktop.store.onReload((k, v) => applyExternal(k, v))

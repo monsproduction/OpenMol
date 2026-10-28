@@ -1,7 +1,7 @@
 // Eigene Vorlagen-Sammlungen: im Browser gespeichert (localStorage), als Datei export-/importierbar.
 // Eine Vorlage ist ein Ausschnitt des Dokuments (ClipData) – Strukturen inkl. Labels, Formatierung,
 // Ringfüllungen, 3D-Tiefe, auch Pfeile/Texte – zentriert um den Ursprung.
-import { lsGet, lsSet } from '../storage'
+import { lsGet, lsSet, onExternalChange } from '../storage'
 import { useSyncExternalStore } from 'react'
 import type { ClipData } from './ops'
 import { uid } from './types'
@@ -45,6 +45,13 @@ function load(): UserLib {
 
 let lib: UserLib = load()
 const listeners = new Set<() => void>()
+
+// Sammlungen wurden außerhalb geändert (anderer Rechner über den Cloud-Ordner, Ortswechsel): neu laden
+onExternalChange((key) => {
+  if (key !== KEY) return
+  lib = load()
+  for (const l of listeners) l()
+})
 
 function save(next: UserLib) {
   lib = next

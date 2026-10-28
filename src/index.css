@@ -2799,3 +2799,6 @@ code {
   flex: 1 1 100%;
   order: 5;
 }
+.set-path {
+  word-break: break-all;
+}
