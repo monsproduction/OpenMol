@@ -2625,3 +2625,158 @@ code {
   font: inherit;
   font-size: 12.5px;
 }
+
+/* ---------- Über OpenMol ---------- */
+.about-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px 0 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.about-btn:hover {
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
+}
+.about-icon,
+.about-quote-icon {
+  display: inline-block;
+  animation: about-pop 0.45s ease-out;
+}
+.about-icon {
+  font-size: 16px;
+  line-height: 1;
+}
+@keyframes about-pop {
+  from {
+    transform: scale(0.4) rotate(-20deg);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.about {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.about-quote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-height: 132px;
+  justify-content: center;
+}
+.about-quote-icon {
+  font-size: 34px;
+}
+.about-sentence {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+  font-weight: 600;
+  animation: about-fade 0.5s ease-out;
+}
+@keyframes about-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.about-paypal {
+  min-width: 200px;
+  height: 40px;
+  font-size: 16px;
+  font-weight: 700;
+  border-radius: 999px;
+  background: #0070ba;
+  border-color: #0070ba;
+}
+.about-paypal:hover:not(:disabled) {
+  background: #005ea6;
+}
+.about-paypal-me {
+  opacity: 0.85;
+  font-weight: 600;
+}
+.about-contact {
+  margin: 0;
+}
+.about-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 14px;
+}
+.about-version {
+  margin: 0;
+}
+.about-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 65vh;
+  overflow: auto;
+}
+.about-back {
+  align-self: flex-start;
+}
+.legal-text h4 {
+  margin: 12px 0 4px;
+  font-size: 13.5px;
+}
+.legal-text p {
+  margin: 0 0 6px;
+  line-height: 1.5;
+}
+.legal-text mark {
+  background: #ffe58a;
+  color: #4a3b00;
+  border-radius: 3px;
+  padding: 0 3px;
+}
+.licenses {
+  list-style: none;
+  padding: 0;
+  margin: 6px 0 0;
+}
+.licenses li {
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+.license-text {
+  white-space: pre-wrap;
+  font-size: 11px;
+  max-height: 260px;
+  overflow: auto;
+  background: var(--panel-2);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 6px 0;
+}
+/* schmale Fenster: nur das Symbol, damit der Dokumentname lesbar bleibt */
+@media (max-width: 1180px) {
+  .about-btn .about-label {
+    display: none;
+  }
+  .about-btn {
+    padding: 0 8px;
+  }
+}

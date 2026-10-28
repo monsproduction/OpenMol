@@ -109,7 +109,7 @@ export interface State {
   hotspot: Hotspot
   editing: Editing | null
   toast: { msg: string; kind: 'info' | 'error'; t: number } | null
-  dialog: null | 'import' | 'periodic' | 'help' | 'templates' | 'export' | 'saveTemplate' | 'settings'
+  dialog: null | 'import' | 'periodic' | 'help' | 'templates' | 'export' | 'saveTemplate' | 'settings' | 'about'
   /** geöffneter Editor einer Ansatztabelle */
   tableEditor: Id | null
   /** offenes Kontextmenü: Bildschirmposition und Dokumentpunkt des Rechtsklicks */

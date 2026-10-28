@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { AboutDialog } from './AboutDialog'
 import { SYMBOLS, elementCategory, ptPosition } from '../model/elements'
 import { nameToStructure, oclToFragment, parseStructure } from '../model/ocl'
 import { getScene, sceneBBox } from '../model/scene'
@@ -32,7 +33,7 @@ import { SECTION_IDS, resetSectionOrder, useSectionOrder } from './inspectorOrde
 import { desktop, type McpInfo } from '../desktop'
 import { claudeCodeCommand, mcpConfigJson, mcpPrompt } from '../mcpSetup'
 
-function Modal({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+export function Modal({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       // Felder mit eigenem Esc (z. B. Umbenennen) behandeln die Taste selbst
@@ -69,6 +70,7 @@ export function Dialogs() {
   if (dialog === 'import') return <ImportDialog />
   if (dialog === 'periodic') return <PeriodicDialog />
   if (dialog === 'help') return <HelpDialog />
+  if (dialog === 'about') return <AboutDialog />
   if (dialog === 'templates') return <TemplatesDialog />
   if (dialog === 'export') return <ExportDialog />
   if (dialog === 'saveTemplate') return <SaveTemplateDialog />

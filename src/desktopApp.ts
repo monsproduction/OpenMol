@@ -44,7 +44,7 @@ export function runMenuCommand(cmd: string) {
     return
   }
   // in einem offenen Dialog nur Bearbeiten-Befehle des Systems und Fenster-Befehle
-  if (getState().dialog && !['settings', 'help'].includes(cmd)) return
+  if (getState().dialog && !['settings', 'help', 'about'].includes(cmd)) return
   const zoom = getState().view.zoom
   const run: Record<string, () => unknown> = {
     new: newDocument,
@@ -65,6 +65,7 @@ export function runMenuCommand(cmd: string) {
     exportCdxml,
     settings: () => setState({ dialog: 'settings' }),
     help: () => setState({ dialog: 'help' }),
+    about: () => setState({ dialog: 'about' }),
     settingsDir: () => desktop?.showSettingsDir(),
     undo,
     redo,

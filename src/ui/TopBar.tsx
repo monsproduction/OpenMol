@@ -1,4 +1,5 @@
 import { lsGet, lsSet } from '../storage'
+import { AboutButton } from './AboutDialog'
 import { useSyncExternalStore } from 'react'
 import { redo, setState, toggleInspector, undo, useStore } from '../store'
 import { fitView, zoomTo } from '../tools/actions'
@@ -113,6 +114,8 @@ export function TopBar() {
         )}
       </div>
       <div className="top-group right">
+        <AboutButton />
+        <div className="top-sep" />
         <Btn icon="zoomOut" title="Verkleinern" onClick={() => zoomTo(zoom / 1.25)} />
         <button className="zoom-val" onClick={() => zoomTo(1)} data-tip="Auf 100 % setzen">
           {Math.round(zoom * 100)} %

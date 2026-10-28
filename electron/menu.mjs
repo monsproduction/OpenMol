@@ -176,7 +176,8 @@ export function buildMenu(getWin, actions = {}) {
           {
             label: app.name,
             submenu: [
-              { role: 'about', label: t.about },
+              // eigenes Fenster „Über OpenMol“ (unterstützen, Kontakt, Impressum, Lizenzen) statt des Systemfensters
+              item(t.about, 'about'),
               { label: t.updates, click: () => actions.checkUpdates?.() },
               { type: 'separator' },
               item(t.settings, 'settings', 'CmdOrCtrl+,'),
@@ -303,7 +304,7 @@ export function buildMenu(getWin, actions = {}) {
       submenu: [
         item(t.shortcuts, 'help'),
         item(t.settingsDir, 'settingsDir'),
-        ...(mac ? [] : [{ type: 'separator' }, { label: t.updates, click: () => actions.checkUpdates?.() }, { role: 'about', label: t.about }]),
+        ...(mac ? [] : [{ type: 'separator' }, { label: t.updates, click: () => actions.checkUpdates?.() }, item(t.about, 'about')]),
       ],
     },
   ]

@@ -360,8 +360,14 @@ function registerIpc() {
     quitting = false
   })
 
+  // Lizenzen von Electron und Chromium (liegen der App bei; in der Entwicklung im Electron-Paket)
+  ipcMain.handle('openmol:open-licenses', async () => {
+    const f = app.isPackaged ? path.join(process.resourcesPath, 'LICENSES.chromium.html') : path.join(here, '..', 'node_modules', 'electron', 'dist', 'LICENSES.chromium.html')
+    if (fs.existsSync(f)) await shell.openPath(f)
+  })
   ipcMain.handle('openmol:open-external', async (_e, url) => {
-    if (/^https?:\/\//i.test(url)) await shell.openExternal(url)
+    // Webseiten und E-Mail-Adressen (mailto: Kontakt in „Über OpenMol“)
+    if (/^(https?:\/\/|mailto:[^\s/]+@[^\s/]+$)/i.test(url)) await shell.openExternal(url)
   })
 
   // Kopieren/Einfügen/Rückgängig in Textfeldern: das System übernimmt (vom Menü über die Oberfläche angestoßen)

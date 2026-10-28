@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "licenses": "node scripts/third-party-licenses.mjs",
     "preview": "vite preview",
     "postinstall": "node -e \"require('fs').copyFileSync('node_modules/openchemlib/dist/resources.json','public/ocl-resources.json')\"",
     "app": "node electron/dev.mjs",
@@ -120,6 +121,14 @@
       }
     ],
     "extraResources": [
+      {
+        "from": "node_modules/electron/dist/LICENSES.chromium.html",
+        "to": "LICENSES.chromium.html"
+      },
+      {
+        "from": "node_modules/electron/dist/LICENSE",
+        "to": "LICENSE.electron.txt"
+      },
       {
         "from": "mcp/bundle",
         "to": "mcp",

@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('openmol', {
   closeOk: () => ipcRenderer.send('openmol:close-ok'),
   closeCancel: () => ipcRenderer.send('openmol:close-cancel'),
   openExternal: (url) => ipcRenderer.invoke('openmol:open-external', url),
+  openLicenses: () => ipcRenderer.invoke('openmol:open-licenses'),
   confirm: (opts) => ipcRenderer.invoke('openmol:confirm', opts),
   nativeEdit: (cmd) => ipcRenderer.send('openmol:native-edit', cmd),
   setUiLang: (l) => ipcRenderer.send('openmol:ui-lang', l),

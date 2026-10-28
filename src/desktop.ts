@@ -43,6 +43,8 @@ export interface DesktopApi {
   closeOk: () => void
   closeCancel: () => void
   openExternal: (url: string) => Promise<void>
+  /** Lizenzen von Electron/Chromium (LICENSES.chromium.html) im Browser öffnen */
+  openLicenses: () => Promise<void>
   confirm: (opts: { message: string; detail?: string; buttons?: string[]; cancelId?: number; type?: string }) => Promise<number>
   nativeEdit: (cmd: string) => void
   setUiLang: (l: string) => void
