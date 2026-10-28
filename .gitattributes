@@ -1,0 +1,2 @@
+# Zeilenenden fest (unter Windows erzeugt postinstall die Datei neu – sonst erscheint sie als geändert)
+public/ocl-resources.json text eol=lf

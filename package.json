@@ -104,6 +104,7 @@
       "icon": "build/icon.ico"
     },
     "nsis": {
+      "artifactName": "OpenMol-Setup-${version}.${ext}",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

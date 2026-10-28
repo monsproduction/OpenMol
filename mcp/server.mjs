@@ -195,7 +195,7 @@ function callApp(tool, args, timeoutMs = 90000) {
   if (Date.now() - lastSeen > 30000 && !waiting.length) {
     return Promise.reject(
       new Error(
-        'OpenMol is not connected. Ask the user to open the app in the browser (e.g. http://localhost:5173) and switch on “KI-Steuerung (MCP)” under Einstellungen (gear icon, ⌘,). / OpenMol ist nicht verbunden: App im Browser öffnen und unter Einstellungen „KI-Steuerung (MCP)“ erlauben.',
+        'OpenMol is not connected. Ask the user to open the OpenMol desktop app (or the browser version, e.g. http://localhost:5173) and switch on “KI-Steuerung (MCP)” under Einstellungen (Mac ⌘, / Windows Ctrl+,); connecting can take up to about 10 seconds. / OpenMol ist nicht verbunden: OpenMol-Desktop-App (oder die Browser-Version) öffnen und unter Einstellungen (Mac ⌘, / Windows Strg+,) „KI-Steuerung (MCP)“ erlauben – das Verbinden dauert bis zu etwa 10 Sekunden.',
       ),
     )
   }
@@ -231,7 +231,7 @@ const INSTRUCTIONS = `OpenMol is a chemical drawing app (similar to ChemDraw) th
 - Prefer the high-level tools (draw_reaction, clean_reaction, create_stoich_table, set_stoich_row).${
   PROFILE === 'full' ? ' For anything else read get_data_model once, then use edit_objects.' : ' (This server runs with the basic tool set.)'
 }
-- If a tool says that OpenMol is not connected, ask the user to open the app (usually http://localhost:5173) and to switch on "KI-Steuerung (MCP)" in the settings.`
+- If a tool says that OpenMol is not connected, ask the user to open the OpenMol desktop app (or the browser version, usually http://localhost:5173) and to switch on "KI-Steuerung (MCP)" in the settings (Mac ⌘, / Windows Ctrl+,); connecting can take up to about 10 seconds.`
 
 const DEFS = [] // alle Werkzeuge; je Verbindung wird daraus ein Server gebaut (HTTP: eine pro Anfrage)
 let defProfile = 'basic'

@@ -7,7 +7,7 @@ und „Allgemeine Test-Checkliste“.
 
 ## A) Installieren
 
-1. `OpenMol Setup <Version>.exe` doppelklicken (selbst gebaut, siehe B).
+1. `OpenMol-Setup-<Version>.exe` doppelklicken (selbst gebaut, siehe B).
 2. Windows zeigt vermutlich eine SmartScreen-Warnung („Der Computer wurde durch Windows geschützt“), weil die App
    nicht mit einem gekauften Zertifikat signiert ist: **„Weitere Informationen“ → „Trotzdem ausführen“**.
 3. Installationsordner wählen (Standard: nur für den aktuellen Benutzer) → Fertig. OpenMol liegt danach im Startmenü
@@ -46,7 +46,7 @@ Einstellungen und Daten liegen in `%APPDATA%\OpenMol\` (`settings.json`, `librar
    npm run app:build:win
    ```
 
-   Ergebnis: `release\OpenMol Setup <Version>.exe`, danach wie in A installieren.
+   Ergebnis: `release\OpenMol-Setup-<Version>.exe`, danach wie in A installieren.
 5. Zum Entwickeln mit Live-Neuladen: `npm run app` (Desktop-App) bzw. `npm run dev` (im Browser,
    <http://localhost:5173>).
 
