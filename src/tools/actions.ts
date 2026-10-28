@@ -65,6 +65,7 @@ export function scaleMolecules(s: number) {
   const { doc, sel } = getState()
   const ids = [...selectionAtomIds(doc, completeSel(doc, sel))]
   if (!ids.length) return toast('Erst ein Molekül auswählen')
+  if (!Number.isFinite(s) || s <= 0) return
   const k = Math.min(10, Math.max(0.1, s))
   commit((d) => setMolScale(d, ids, k))
 }

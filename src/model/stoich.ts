@@ -387,10 +387,12 @@ export function computeTable(doc: Doc, t: StoichTable): TableCalc {
   // (abzüglich der Volumina eingesetzter Lösungen), aufgeteilt nach Volumenteilen (ohne Angabe je 1 Teil)
   const solv = t.rows.map((r, i) => [r, i] as const).filter(([r]) => r.role === 'solvent')
   const target = t.targetConc && nRef !== undefined && solv.length ? Math.max(0, nRef / t.targetConc - solventV) : undefined
-  const sumParts = solv.reduce((a, [r]) => a + (r.parts ?? 1), 0)
+  // Volumenteile: nur positive Werte zählen (sonst 1 Teil) – keine Division durch 0
+  const part = (r: StoichRow) => (r.parts !== undefined && Number.isFinite(r.parts) && r.parts > 0 ? r.parts : 1)
+  const sumParts = solv.reduce((a, [r]) => a + part(r), 0)
   for (const [r, i] of solv) {
     const c = rows[i]
-    c.V = target !== undefined ? (target * (r.parts ?? 1)) / sumParts : r.volume
+    c.V = target !== undefined ? (target * part(r)) / sumParts : r.volume !== undefined && r.volume >= 0 ? r.volume : undefined
     c.m = c.V !== undefined && r.density ? c.V * 1000 * r.density : undefined
     c.n = c.m !== undefined && c.mw ? c.m / c.mw : undefined
     if (c.V) solventV += c.V

@@ -35,7 +35,11 @@ function fragmentsOf(doc: Doc, ids: Id[]): Id[][] {
     while (st.length) {
       const u = st.pop()!
       f.push(u)
-      for (const v of adj.get(u) ?? []) if (!seen.has(v)) (seen.add(v), st.push(v))
+      for (const v of adj.get(u) ?? [])
+        if (!seen.has(v)) {
+          seen.add(v)
+          st.push(v)
+        }
     }
     out.push(f)
   }
@@ -98,7 +102,11 @@ export function propagateMolScale(d: Doc) {
       while (st.length) {
         const u = st.pop()!
         comp.push(u)
-        for (const v of adj.get(u) ?? []) if (!seen.has(v) && d.atoms[v] && d.atoms[v].scale === undefined) (seen.add(v), st.push(v))
+        for (const v of adj.get(u) ?? [])
+          if (!seen.has(v) && d.atoms[v] && d.atoms[v].scale === undefined) {
+            seen.add(v)
+            st.push(v)
+          }
       }
       const s = a.scale!
       const anchor: Pt = { x: a.x, y: a.y }
