@@ -13,6 +13,7 @@ import { syncReactionLinks } from './model/reactionLink'
 import { pruneGroups } from './model/groups'
 import { newDoc } from './defaultStyle'
 import { propagateMolScale } from './model/molscale'
+import { pruneGradients } from './model/gradients'
 
 // Nur in der Entwicklung: Zugriff für Tests über die Browser-Konsole
 if (import.meta.env.DEV) {
@@ -34,6 +35,7 @@ store.setCommitHook((d) => {
   pruneGroups(d)
   // an skalierte Moleküle neu gezeichnete Atome übernehmen deren Größe
   propagateMolScale(d)
+  pruneGradients(d)
 })
 
 // Desktop-App: Menüleiste, Dateien, Fenster (im Browser ohne Wirkung)

@@ -2788,3 +2788,14 @@ code {
 .docstyle-default {
   margin-top: 10px;
 }
+/* Farbverlauf im Inspektor: Winkel-Regler in eigener Zeile */
+.grad-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.grad-pick > .num-slider {
+  flex: 1 1 100%;
+  order: 5;
+}

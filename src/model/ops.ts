@@ -672,6 +672,8 @@ export interface ClipData {
   fills?: Doc['fills'][string][]
   cycles?: Doc['cycles'][string][]
   tables?: Doc['tables'][string][]
+  /** Farbverläufe, auf die kopierte Objekte verweisen (model/gradients.ts) */
+  gradients?: NonNullable<Doc['gradients']>[string][]
 }
 
 export function extractClip(d: Doc, sel: Selection): ClipData {
@@ -708,11 +710,14 @@ export function extractClip(d: Doc, sel: Selection): ClipData {
           return info ? { ...r, formula: r.formula ?? info.formula, mw: r.mw ?? info.mw } : { ...r }
         }),
       })),
+    gradients: Object.values(d.gradients ?? {}),
   }
 }
 
 export function pasteClip(d: Doc, c: ClipData, dx: number, dy: number): Selection {
   const sel = emptySelection()
+  // Farbverläufe der kopierten Objekte mitnehmen (ungenutzte räumt pruneGradients weg)
+  for (const g of c.gradients ?? []) if (g && !d.gradients?.[g.id]) d.gradients = { ...(d.gradients ?? {}), [g.id]: { ...g } }
   const am = new Map<Id, Id>()
   const bm = new Map<Id, Id>()
   for (const a of c.atoms) {

@@ -21,7 +21,9 @@ function sanitizeClip(c: Record<string, unknown>): ClipData | null {
   if (keys.reduce((n, k) => n + list(c[k]).length, 0) > MAX_OBJECTS) return null
   const byId = (v: unknown) => Object.fromEntries(list(v).map((o) => [(o as { id: string }).id, o]))
   const raw = Object.fromEntries(keys.map((k) => [k, byId(c[k])]))
-  const d = normalizeDoc({ ...emptyDoc(), ...raw })
+  // Farbverläufe (Liste → Objekt; geprüft in normalizeDoc)
+  const grads = Array.isArray(c.gradients) ? Object.fromEntries(c.gradients.filter((g) => g && typeof g.id === 'string').map((g) => [g.id, g])) : undefined
+  const d = normalizeDoc({ ...emptyDoc(), ...raw, gradients: grads })
   return {
     atoms: Object.values(d.atoms),
     bonds: Object.values(d.bonds),
@@ -32,6 +34,7 @@ function sanitizeClip(c: Record<string, unknown>): ClipData | null {
     fills: Object.values(d.fills),
     cycles: Object.values(d.cycles),
     tables: Object.values(d.tables),
+    gradients: Object.values(d.gradients ?? {}),
   }
 }
 

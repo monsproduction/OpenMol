@@ -1,4 +1,5 @@
 import { GhsIcon } from './Ghs'
+import { gradElId, gradientMembers, paint } from '../model/gradients'
 import { atomScale, bondScale, scaledStyle } from '../model/molscale'
 import { tableGeom } from '../model/stoichLayout'
 import { useId, type ReactElement } from 'react'
@@ -16,6 +17,7 @@ import {
   curvedGeom,
   doubleSide,
   ringPolygonPath,
+  sceneBBox,
   textBox,
   textLayoutOf,
   type Scene,
@@ -32,7 +34,7 @@ const P = (p: Pt) => `${r(p.x)},${r(p.y)}`
 const r = (n: number) => Math.round(n * 100) / 100
 
 export function atomColor(doc: Doc, a: Atom): string {
-  if (a.color) return a.color
+  if (a.color) return paint(doc, a.color) ?? INK
   if (doc.style.colorAtoms && !a.label) return ELEMENT_COLOR[a.element] ?? INK
   return INK
 }
@@ -87,7 +89,7 @@ export function RichLines({
 
 function TextBlock({ t, doc }: { t: TextObj; doc: Doc }) {
   const L = textLayoutOf(t, doc)
-  const color = t.color ?? INK
+  const color = paint(doc, t.color) ?? INK
   const box = textBox(t, doc)
   return (
     <g opacity={t.opacity}>
@@ -99,7 +101,7 @@ function TextBlock({ t, doc }: { t: TextObj; doc: Doc }) {
           width={r(box.x2 - box.x1 + t.size * 0.36)}
           height={r(box.y2 - box.y1 + t.size * 0.16)}
           rx={r(t.size * 0.3)}
-          fill={t.highlight}
+          fill={paint(doc, t.highlight)}
           opacity={HIGHLIGHT_OPACITY}
         />
       )}
@@ -125,14 +127,15 @@ function HighlightLayer({ scene, atoms, bonds }: { scene: Scene; atoms: string[]
     const p = b && doc.atoms[b.a1]
     const q = b && doc.atoms[b.a2]
     if (!b?.highlight || !p || !q) continue
-    els.push(<line key={'hb' + id} x1={r(p.x)} y1={r(p.y)} x2={r(q.x)} y2={r(q.y)} stroke={b.highlight} strokeWidth={r(w)} strokeLinecap="round" />)
+    els.push(<line key={'hb' + id} x1={r(p.x)} y1={r(p.y)} x2={r(q.x)} y2={r(q.y)} stroke={paint(doc, b.highlight)} strokeWidth={r(w * bondScale(doc, b))} strokeLinecap="round" />)
   }
   for (const id of atoms) {
     const a = doc.atoms[id]
     if (!a?.highlight) continue
     const lab = scene.decor.get(id)?.label
+    const k = atomScale(a)
     if (lab) {
-      const pad = fs * 0.16
+      const pad = fs * k * 0.16
       els.push(
         <rect
           key={'ha' + id}
@@ -140,11 +143,11 @@ function HighlightLayer({ scene, atoms, bonds }: { scene: Scene; atoms: string[]
           y={r(a.y + lab.top - pad)}
           width={r(lab.right - lab.left + pad * 2)}
           height={r(lab.bottom - lab.top + pad * 2)}
-          rx={r(fs * 0.3)}
-          fill={a.highlight}
+          rx={r(fs * k * 0.3)}
+          fill={paint(doc, a.highlight)}
         />,
       )
-    } else els.push(<circle key={'ha' + id} cx={r(a.x)} cy={r(a.y)} r={r(w / 2)} fill={a.highlight} />)
+    } else els.push(<circle key={'ha' + id} cx={r(a.x)} cy={r(a.y)} r={r((w * k) / 2)} fill={paint(doc, a.highlight)} />)
   }
   if (!els.length) return null
   return <g opacity={HIGHLIGHT_OPACITY}>{els}</g>
@@ -198,7 +201,7 @@ function bondInner(scene: Scene, b: Bond) {
   const A2 = doc.atoms[b.a2]
   const lw = bondLineWidth(doc, b)
   const L = st.bondLength * bondScale(doc, b)
-  const color = b.color ?? depthColor(scene, (A1.z ?? 0) / 2 + (A2.z ?? 0) / 2)
+  const color = paint(doc, b.color) ?? depthColor(scene, (A1.z ?? 0) / 2 + (A2.z ?? 0) / 2)
   const { p1, p2, c1, c2 } = bondEnds(scene, b)
   const v = sub(p2, p1)
   const l = len(v)
@@ -440,7 +443,7 @@ function AtomShape({ scene, a }: { scene: Scene; a: Atom }) {
   if (d.num) {
     // Atomnummer (NMR-Zuordnung): klein, in Atomfarbe gedämpft
     els.push(
-      <text key="num" x={r(d.num.c.x)} y={r(d.num.c.y + fs * 0.2)} fontFamily={font} fontSize={r(fs * 0.58)} fill={a.color ?? NUM_COLOR} textAnchor="middle">
+      <text key="num" x={r(d.num.c.x)} y={r(d.num.c.y + fs * 0.2)} fontFamily={font} fontSize={r(fs * 0.58)} fill={paint(doc, a.color) ?? NUM_COLOR} textAnchor="middle">
         {d.num.text}
       </text>,
     )
@@ -497,7 +500,7 @@ export function headPath(tip: Pt, dir: Pt, size: number, mode: 'full' | 'left' |
 function ArrowShape({ doc, ar }: { doc: Doc; ar: Arrow }) {
   const st = doc.style
   const lw = ar.bold ? Math.max(boldLineWidth(doc), st.lineWidth * (ar.width ?? 1)) : st.lineWidth * (ar.width ?? 1)
-  const color = ar.color ?? INK
+  const color = paint(doc, ar.color) ?? INK
   const pts = arrowPoints(ar)
   const s = pts[0]
   const e = pts[pts.length - 1]
@@ -586,7 +589,7 @@ function CurvedShape({ scene, ca }: { scene: Scene; ca: CurvedArrow }) {
   if (!cg) return null
   const st = scene.doc.style
   const lw = ca.bold ? boldLineWidth(scene.doc) : st.lineWidth * 0.9
-  const color = ca.color ?? INK
+  const color = paint(scene.doc, ca.color) ?? INK
   const hs = 4 * lw + 5
   const end = sub(cg.p1, mul(cg.dirEnd, hs * 0.6))
   // Pfeilspitze: Halbpfeil auf der Außenseite der Krümmung
@@ -637,7 +640,7 @@ function shapePaint(s: Shape, gid: string, x1: number, y1: number, w: number, h:
 
 function ShapeEl({ s, doc }: { s: Shape; doc: Doc }) {
   const lw = s.bold ? boldLineWidth(doc) : doc.style.lineWidth
-  const color = s.color ?? INK
+  const color = paint(doc, s.color) ?? INK
   const x1 = Math.min(s.x1, s.x2)
   const x2 = Math.max(s.x1, s.x2)
   const y1 = Math.min(s.y1, s.y2)
@@ -808,7 +811,7 @@ function RingFillShape({ scene, f }: { scene: Scene; f: RingFill }) {
 
 function CycleShape({ doc, c }: { doc: Doc; c: Cycle }) {
   const lw = c.bold ? Math.max(boldLineWidth(doc), doc.style.lineWidth * (c.width ?? 1)) : doc.style.lineWidth * (c.width ?? 1)
-  const color = c.color ?? INK
+  const color = paint(doc, c.color) ?? INK
   const hs = 4.5 * lw + 5
   const dash = c.dashed ? `${lw * 3} ${lw * 2.4}` : undefined
   const els: ReactElement[] = []
@@ -1166,6 +1169,45 @@ function StoichTableEl({ doc, t }: { doc: Doc; t: StoichTable }) {
   )
 }
 
+// ---------- Farbverläufe für Linien, Beschriftungen, Textmarker ----------
+
+/** <defs> aller Verläufe (doc.gradients): jeder spannt sich über die Objekte, die ihn verwenden */
+function GradientDefs({ scene }: { scene: Scene }) {
+  const doc = scene.doc
+  if (!doc.gradients) return null
+  const els: ReactElement[] = []
+  for (const [gid, members] of gradientMembers(doc)) {
+    const g = doc.gradients[gid]
+    if (!g) continue
+    const b = sceneBBox(scene, members)
+    if (!b) continue
+    const cx = (b.x1 + b.x2) / 2
+    const cy = (b.y1 + b.y2) / 2
+    const id = gradElId(gid)
+    const stops = [<stop key="1" offset="0" stopColor={g.c1} />, <stop key="2" offset="1" stopColor={g.c2} />]
+    if (g.grad === 'radial') {
+      const rr = Math.max(1, Math.hypot(b.x2 - b.x1, b.y2 - b.y1) / 2)
+      els.push(
+        <radialGradient key={id} id={id} gradientUnits="userSpaceOnUse" cx={r(cx)} cy={r(cy)} r={r(rr)}>
+          {stops}
+        </radialGradient>,
+      )
+    } else {
+      // gleiche Winkel-Regel wie bei der Ringfüllung (0° = von links nach rechts)
+      const a = (g.angle * Math.PI) / 180
+      const dx = Math.cos(a)
+      const dy = Math.sin(a)
+      const h = Math.max(1, (Math.abs(dx) * (b.x2 - b.x1) + Math.abs(dy) * (b.y2 - b.y1)) / 2)
+      els.push(
+        <linearGradient key={id} id={id} gradientUnits="userSpaceOnUse" x1={r(cx - dx * h)} y1={r(cy - dy * h)} x2={r(cx + dx * h)} y2={r(cy + dy * h)}>
+          {stops}
+        </linearGradient>,
+      )
+    }
+  }
+  return <defs>{els}</defs>
+}
+
 // ---------- Gesamtes Dokument ----------
 
 export function DocContent({ scene, exportMode = false }: { scene: Scene; exportMode?: boolean }) {
@@ -1234,6 +1276,7 @@ export function DocContent({ scene, exportMode = false }: { scene: Scene; export
   })
   return (
     <g>
+      <GradientDefs scene={scene} />
       {els}
       {!exportMode && <WarningMarks scene={scene} />}
     </g>

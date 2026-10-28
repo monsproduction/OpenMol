@@ -1,4 +1,5 @@
 // Befehle, die von Menüs, Tastenkürzeln und der Zeichenfläche gemeinsam genutzt werden.
+import { GRAD_PREFIX, gradId, isGrad } from '../model/gradients'
 import { atomScale, setMolScale } from '../model/molscale'
 import { autoNumber } from '../model/numbering'
 import { countObjects, hasLocked, inGroup, lockItems, makeGroup, removeGroups, unlockAll, withoutLocked } from '../model/groups'
@@ -33,7 +34,7 @@ import { applyOrder, reorderKeys, type OrderMode } from '../model/order'
 import type { Fragment } from '../model/ocl'
 import type { Doc, Id, Selection, StoichRow } from '../model/types'
 import { formulaHtml, newRow, parseConditionText } from '../model/stoich'
-import { emptySelection, selectionSize, uid } from '../model/types'
+import { emptySelection, selectionSize, uid, type Gradient } from '../model/types'
 import { richPlain } from '../model/richtext'
 import { clipboard, commit, getState, pruneSel, setState, toast } from '../store'
 import { fmtDec, getSettings } from '../settings'
@@ -1275,6 +1276,31 @@ export function setHighlight(color: string | undefined) {
     for (const id of s.atoms) if (d.atoms[id]) d.atoms[id].highlight = color
     for (const id of s.bonds) if (d.bonds[id]) d.bonds[id].highlight = color
     for (const id of s.texts) if (d.texts[id]) d.texts[id].highlight = color
+  })
+}
+
+/**
+ * Farbverlauf für die Auswahl (Linien/Beschriftungen bzw. Textmarker): verwenden alle markierten Objekte schon
+ * denselben Verlauf, wird er geändert, sonst entsteht ein neuer, der sich über die ganze Auswahl spannt.
+ * g = null: Verlauf entfernen (zurück zur ersten Farbe).
+ */
+export function setGradient(field: 'color' | 'highlight', g: Omit<Gradient, 'id'> | null) {
+  const { doc, sel } = getState()
+  if (!selectionSize(sel)) return toast('Erst Objekte auswählen')
+  const s = completeSel(doc, sel)
+  const kinds = field === 'highlight' ? (['atoms', 'bonds', 'texts'] as const) : (['atoms', 'bonds', 'arrows', 'curved', 'texts', 'shapes', 'cycles'] as const)
+  const objs = kinds.flatMap((k) => (s[k] ?? []).map((id) => (doc[k] as Record<Id, { color?: string; highlight?: string }>)[id]).filter(Boolean))
+  const cur = objs.map((o) => o[field])
+  const shared = cur.length && cur.every((c) => c === cur[0]) && isGrad(cur[0]) ? gradId(cur[0]!) : null
+  commit((d) => {
+    const gid = shared ?? uid('gr')
+    if (g) d.gradients = { ...(d.gradients ?? {}), [gid]: { id: gid, ...g } }
+    const value = g ? GRAD_PREFIX + gid : shared ? d.gradients?.[shared]?.c1 : undefined
+    for (const k of kinds)
+      for (const id of s[k] ?? []) {
+        const o = (d[k] as Record<Id, { color?: string; highlight?: string }>)[id]
+        if (o && (g || isGrad(o[field]))) o[field] = value
+      }
   })
 }
 

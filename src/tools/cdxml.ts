@@ -3,6 +3,7 @@
 // CDXObject.cpp/CDXGraphic.cpp/CDXBond.cpp/CDXArrow.cpp), echte ChemDraw-23-Dateien aus den RDKit-
 // Testdaten sowie der CDXML-Writer von EPAM Indigo (molecule_cdxml_saver.cpp).
 // Koordinaten in Punkt, y nach unten. Bindungslänge 14,4 pt (ACS-Stil).
+import { solid } from '../model/gradients'
 import { bondValue, fragments, hCount } from '../model/chem'
 import { ABBREVIATIONS, canonicalAbbrev } from '../model/abbrev'
 import type { AtomDecor } from '../model/annot'
@@ -49,7 +50,9 @@ export function buildCdxml(doc: Doc, title = 'OpenMol'): string {
 
   // Farben: Einträge 0/1 (schwarz/weiß) sind implizit; geschriebene Einträge beginnen bei Index 2
   const colors: string[] = ['#ffffff', '#000000']
-  const colorIdx = (c?: string): number | null => {
+  const colorIdx = (c0?: string): number | null => {
+    // Farbverlauf: CDXML kennt keine Verläufe – die erste Farbe
+    const c = solid(doc, c0)
     if (!c) return null
     const hex = c.toLowerCase()
     if (hex === '#111418' || hex === '#000000') return null

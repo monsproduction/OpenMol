@@ -3,8 +3,9 @@ import { linearizeTriples, selectionAtomIds } from '../model/ops'
 import { analyze, smilesToName, stereoCenters } from '../model/ocl'
 import { isotopePattern } from '../model/isotopePattern'
 import { hasLocked, inGroup } from '../model/groups'
+import { gradId, isGrad, solid } from '../model/gradients'
 import { saveDefaultStyle } from '../defaultStyle'
-import type { ArrowKind, ArrowRoute, BondType, Cycle, DocStyle, DoublePos, LayoutAids, Shape, ShapeKind } from '../model/types'
+import type { ArrowKind, ArrowRoute, BondType, Cycle, DocStyle, DoublePos, Gradient, LayoutAids, Shape, ShapeKind } from '../model/types'
 import { CLOSED_SHAPES, FONTS, STYLE_PRESETS, emptySelection, selectionSize } from '../model/types'
 import type { FillStyle } from '../model/rings'
 import { arrowTextOpts, getScene, textBox } from '../model/scene'
@@ -18,6 +19,7 @@ import { attachCycle, newArcLabel, newBranch, redistribute, stationHalfGaps, sta
 import {
   arrange,
   scaleMolecules,
+  setGradient,
   groupSelection,
   lockSelection,
   ungroupSelection,
@@ -1083,7 +1085,10 @@ export function Inspector() {
 
       {!none && (
         <Section id="color" title="Farbe & Deckkraft">
-          <ColorPick value={firstColor} onChange={setColorAll} />
+          <ColorPick value={solid(doc, firstColor)} onChange={setColorAll} />
+          <Row label="Verlauf">
+            <GradientPick value={isGrad(firstColor) ? doc.gradients?.[gradId(firstColor)] : undefined} base={solid(doc, firstColor) ?? '#111418'} onChange={(g) => setGradient('color', g)} />
+          </Row>
           <Row label="Fett">
             <div className="seg">
               <button className={selectionBold() ? 'active' : ''} data-tip="Fett (⌘B): Texte und Zeichen fett, Linien so dick wie ein fetter Buchstabe" onClick={() => toggleBold()}>
@@ -1106,7 +1111,7 @@ export function Inspector() {
                 {HIGHLIGHT_COLORS.map((h) => (
                   <button
                     key={h.c}
-                    className={'hl-swatch' + (firstHighlight === h.c ? ' active' : '')}
+                    className={'hl-swatch' + (solid(doc, firstHighlight) === h.c ? ' active' : '')}
                     style={{ background: h.c }}
                     data-tip={`Textmarker ${h.name} – Atome, Bindungen und Texte farbig hinterlegen`}
                     aria-label={`Textmarker ${h.name}`}
@@ -1114,6 +1119,15 @@ export function Inspector() {
                   />
                 ))}
               </div>
+            </Row>
+          )}
+          {(atoms.length > 0 || texts.length > 0) && (
+            <Row label="Textmarker-Verlauf">
+              <GradientPick
+                value={isGrad(firstHighlight) ? doc.gradients?.[gradId(firstHighlight)] : undefined}
+                base={solid(doc, firstHighlight) ?? HIGHLIGHT_COLORS[0].c}
+                onChange={(g) => setGradient('highlight', g)}
+              />
             </Row>
           )}
         </Section>
@@ -1959,6 +1973,31 @@ function LayoutAidsControls() {
           Hilfslinien löschen ({nGuides})
         </button>
       )}
+    </div>
+  )
+}
+
+/** Farbverlauf an/aus und einstellen (zwei Farben, linear mit Winkel oder radial) – wie bei der Ringfüllung */
+function GradientPick({ value, base, onChange }: { value: Gradient | undefined; base: string; onChange: (g: Omit<Gradient, 'id'> | null) => void }) {
+  if (!value)
+    return (
+      <button className="btn small" onClick={() => onChange({ c1: base.startsWith('#') ? base : '#2f6bff', c2: '#d63384', grad: 'linear', angle: 0 })} data-tip="Farbverlauf über die ganze Auswahl (z. B. das markierte Molekül)">
+        Verlauf hinzufügen
+      </button>
+    )
+  const set = (p: Partial<Gradient>) => onChange({ c1: value.c1, c2: value.c2, grad: value.grad, angle: value.angle, ...p })
+  return (
+    <div className="fill-opts compact grad-pick">
+      <input type="color" value={value.c1} onChange={(e) => set({ c1: e.target.value })} data-tip={value.grad === 'radial' ? 'Farbe Mitte' : 'Farbe 1'} />
+      <input type="color" value={value.c2} onChange={(e) => set({ c2: e.target.value })} data-tip={value.grad === 'radial' ? 'Farbe Rand' : 'Farbe 2'} />
+      <select className="opt-select" value={value.grad} onChange={(e) => set({ grad: e.target.value as Gradient['grad'] })}>
+        <option value="linear">linear</option>
+        <option value="radial">radial</option>
+      </select>
+      {value.grad === 'linear' && <NumSlider min={0} max={360} step={15} digits={0} unit="°" value={value.angle} def={0} onChange={(v) => set({ angle: v })} />}
+      <button className="icon-btn small" onClick={() => onChange(null)} data-tip="Verlauf entfernen (zurück zur ersten Farbe)" aria-label="Verlauf entfernen">
+        <Icon name="close" size={13} />
+      </button>
     </div>
   )
 }

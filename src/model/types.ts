@@ -1,5 +1,6 @@
 // Datenmodell des Dokuments. Koordinaten in Dokument-Einheiten (1 = 1px bei 100 % Zoom),
 // y-Achse zeigt wie im Bildschirm nach unten.
+import { validGradient } from './gradients'
 
 export type Id = string
 
@@ -458,6 +459,17 @@ export interface Doc {
   groups?: Record<Id, Group>
   /** gesperrte Objekte (nicht anklickbar/verschiebbar) */
   locked?: ObjLists
+  /** Farbverläufe für Linien/Beschriftungen/Textmarker (Objekte verweisen mit „grad:<id>“), siehe model/gradients.ts */
+  gradients?: Record<Id, Gradient>
+}
+
+export interface Gradient {
+  id: Id
+  c1: string
+  c2: string
+  grad: 'linear' | 'radial'
+  /** Winkel des linearen Verlaufs in Grad (0 = von links nach rechts) */
+  angle: number
 }
 
 /** Listen von Objekt-Ids je Art (wie eine Auswahl, alle Arten optional) */
@@ -720,6 +732,15 @@ export function normalizeDoc(raw: Partial<Doc>): Doc {
       }
     if (Object.keys(g).length) d.groups = g
     else delete d.groups
+  }
+  if (d.gradients !== undefined) {
+    const g: Record<Id, Gradient> = {}
+    if (d.gradients && typeof d.gradients === 'object') for (const [id, x] of Object.entries(d.gradients)) {
+      const v = validGradient(x, id, safeColor)
+      if (v) g[id] = v
+    }
+    if (Object.keys(g).length) d.gradients = g
+    else delete d.gradients
   }
   if (d.locked !== undefined) {
     const l = lists(d.locked)
