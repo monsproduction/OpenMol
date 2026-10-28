@@ -419,16 +419,18 @@ export function newBranchPair(angle: number, r: number): CycleBranch[] {
 }
 
 /**
- * Zweiter Zyklus, der den ersten an der Stelle `angle` überlappt (kleiner, gegenläufig, zwei Stationen
- * abseits der Überlappung) – wie der Cu-Zyklus an der Transmetallierung der Sonogashira-Kupplung.
+ * Zweiter Zyklus, angedockt an der Stelle `angle` wie ein Durchlauf: außen, die beiden Kreise berühren sich nur in
+ * diesem Punkt (kein Überlappen) und laufen dort gegenläufig weiter – wie der Cu-Zyklus an der Transmetallierung
+ * der Sonogashira-Kupplung. Kleiner als der erste, zwei Stationen abseits der Berührstelle.
  */
 export function attachCycle(c: Cycle, angle: number): Cycle {
   const R = meanR(c)
-  const r = Math.round(R * 0.5)
+  const r = Math.round(R * 0.55)
   const p = ePoint(c, angle)
   const n = eNormal(c, angle)
-  const cx = p.x + n.x * r * 0.45
-  const cy = p.y + n.y * r * 0.45
+  // Mittelpunkt auf der Außennormalen im Abstand r: Berührung genau im Punkt p
+  const cx = p.x + n.x * r
+  const cy = p.y + n.y * r
   const back = (Math.atan2(-n.y, -n.x) * 180) / Math.PI
   const nc = newCycle(cx, cy, r, 0, c.dir === 'cw' ? 'ccw' : 'cw')
   nc.stations = [{ angle: norm360(back - 105) }, { angle: norm360(back + 105) }]

@@ -496,7 +496,7 @@ export function OptionsBar() {
           <OptBtn icon="cyc-in" title="Zufluss (Edukt mündet ein): von außen auf den Kreis ziehen oder auf den Kreis klicken" label="Zufluss" active={opts.cycleMode === 'in'} onClick={() => setTool('cycle', { cycleMode: 'in' })} />
           <OptBtn icon="cyc-out" title="Abfluss (Produkt verlässt den Zyklus): vom Kreis weg ziehen oder auf den Kreis klicken" label="Abfluss" active={opts.cycleMode === 'out'} onClick={() => setTool('cycle', { cycleMode: 'out' })} />
           <OptBtn icon="cyc-pair" title="Durchlauf: Edukt rein und Nebenprodukt raus an derselben Stelle (z. B. Base → [Base]H⁺X⁻)" label="Durchlauf" active={opts.cycleMode === 'pair'} onClick={() => setTool('cycle', { cycleMode: 'pair' })} />
-          <OptBtn icon="cyc-second" title="Zweiten Zyklus anhängen: auf die Stelle des Kreises klicken, an der er überlappen soll (kleiner, gegenläufig)" label="2. Zyklus" active={opts.cycleMode === 'second'} onClick={() => setTool('cycle', { cycleMode: 'second' })} />
+          <OptBtn icon="cyc-second" title="Zweiten Zyklus andocken: auf die Stelle des Kreises klicken, an der er anschließen soll – außen, berührt den ersten nur dort (wie ein Durchlauf), kleiner und gegenläufig" label="2. Zyklus" active={opts.cycleMode === 'second'} onClick={() => setTool('cycle', { cycleMode: 'second' })} />
           <div className="opt-sep" />
           <span className="opt-label">Stationen</span>
           <select className="opt-select" data-tip="Anzahl der Stationen (Zwischenstufen) eines neuen Zyklus" value={opts.cycleStations} onChange={(e) => setTool('cycle', { cycleStations: Number(e.target.value) })}>

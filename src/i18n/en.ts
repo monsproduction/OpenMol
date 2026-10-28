@@ -341,7 +341,8 @@ export const EN: Record<string, string> = {
   'Zufluss (Edukt mündet ein): von außen auf den Kreis ziehen oder auf den Kreis klicken': 'Input (reactant enters): drag onto the circle from outside or click the circle',
   'Abfluss (Produkt verlässt den Zyklus): vom Kreis weg ziehen oder auf den Kreis klicken': 'Output (product leaves the cycle): drag away from the circle or click the circle',
   'Durchlauf: Edukt rein und Nebenprodukt raus an derselben Stelle (z. B. Base → [Base]H⁺X⁻)': 'Pass-through: reactant in and by-product out at the same spot (e.g. base → [base]H⁺X⁻)',
-  'Zweiten Zyklus anhängen: auf die Stelle des Kreises klicken, an der er überlappen soll (kleiner, gegenläufig)': 'Attach a second cycle: click where it should overlap (smaller, opposite direction)',
+  'Zweiten Zyklus andocken: auf die Stelle des Kreises klicken, an der er anschließen soll – außen, berührt den ersten nur dort (wie ein Durchlauf), kleiner und gegenläufig':
+    'Dock a second cycle: click where it should connect – outside, touching the first only there (like a pass-through), smaller and in the opposite direction',
   Station: 'Station',
   Stationen: 'Stations',
   Zufluss: 'Input',
