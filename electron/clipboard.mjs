@@ -12,10 +12,11 @@ export let lastWriteMode = ''
 /**
  * PNG mit Datenblock auf die Zwischenablage. Mac: roh als public.png – als image/png würde Chromium es neu codieren
  * und den Datenblock verwerfen; Word und PowerPoint für Mac behalten es unverändert (getestet).
- * Windows (UNGETESTET): normales Bild (Chromium legt daraus die Bitmap für Paint, Teams … ab) und zusätzlich roh im
- * Format „PNG“, das Office liest und selbst schreibt. Auf dem Mac setzt sich in einem gemeinsamen Eintrag das Rohformat
- * gegen das von Chromium neu codierte PNG durch (getestet) – ob das unter Windows auch so ist, prüft der Rückleseversuch:
- * fehlen die Daten, nur das rohe „PNG“ (Office behält die Daten, andere Programme sehen dann evtl. kein Bild).
+ * Windows (getestet 2026-10-26, Windows 11, Word aus Microsoft 365, Paint): nur roh im Format „PNG“. Gemeinsam mit
+ * einem normalen Bild (image/png) setzt sich unter Windows das von Chromium neu codierte PNG durch – die Daten gehen
+ * verloren; clipboard.read() zeigt das rohe „PNG“ nicht an (der Rücklese-Test liest es deshalb mit PowerShell). Das
+ * rohe „PNG“ behält die Daten; Word übernimmt es, beim erneuten Kopieren aus Word stecken die Daten im Format
+ * „Art::GVML ClipFormat“ (das scanClipboard() liest), und Paint fügt es als Bild ein.
  */
 export async function writePng(data) {
   const blob = () => new Blob([Buffer.from(data)], { type: 'image/png' })
@@ -29,10 +30,6 @@ export async function writePng(data) {
     lastWriteMode = 'plain'
     return true
   }
-  const want = findPayload(Buffer.from(data))
-  await clipboard.write([new ClipboardItem({ 'image/png': blob(), [RAW('PNG')]: blob() })])
-  lastWriteMode = 'win-both'
-  if (!want || (await scanClipboard()) === want) return true
   await clipboard.write([new ClipboardItem({ [RAW('PNG')]: blob() })])
   lastWriteMode = 'win-raw-only'
   return true

@@ -22,13 +22,14 @@ import {
   selectAll,
   toggle3D,
   viewCenter,
+  zoomTo,
 } from './actions'
 import { cleanReaction } from './cleanup'
 import { ATOM_KEYS, BOND_KEYS, atomHotkey, bondHotkey, grabHotspot, hotspotFromSelection, liveHotspot, moveHotspot, reactionShortcut, selectHotspotMolecule } from './hotkeys'
 import { openFile, printDocument, saveDocument } from './io'
 import { decodeClipPayload, findClipPayload } from './clipData'
 import { desktop } from '../desktop'
-import { T } from '../i18n/i18n'
+import { IS_MAC, T } from '../i18n/i18n'
 
 const ELEMENT_KEYS: Record<string, string> = {
   c: 'C',
@@ -186,6 +187,10 @@ export function handleKeyDown(e: KeyboardEvent) {
     } else if (lk === '0') {
       e.preventDefault()
       fitView()
+    } else if (k === '+' && desktop && !IS_MAC) {
+      // Windows-App: Strg+Plus erreicht das Menü auf deutschen Tastaturen nicht (Electron erwartet dort Umschalt+=)
+      e.preventDefault()
+      zoomTo(st.view.zoom * 1.25)
     } else if (k === ',') {
       e.preventDefault()
       setState({ dialog: 'settings' })
