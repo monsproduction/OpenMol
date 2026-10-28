@@ -875,6 +875,7 @@ function HelpDialog() {
           </p>
         </div>
       </div>
+      <p className="muted small legal-note">OpenMol ist ein unabhängiges Projekt und steht in keiner Verbindung zu ChemDraw oder dessen Hersteller. ChemDraw ist eine Marke ihres Inhabers; Hinweise auf ChemDraw beschreiben nur die Kompatibilität (Dateiformat CDXML) und vertraute Tastenkürzel.</p>
       <footer>
         <button className="btn primary" onClick={close}>
           Verstanden

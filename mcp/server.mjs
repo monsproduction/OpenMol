@@ -223,7 +223,7 @@ function toContent(result) {
 // ---------- MCP-Server ----------
 
 // Kurzanleitung, die jede verbundene KI beim Start erhält (auch KIs, die OpenMol nicht kennen)
-const INSTRUCTIONS = `OpenMol is a chemical drawing app (similar to ChemDraw) that is open in the user's web browser. These tools edit the open document live, and every change can be undone (undo tool, or Cmd+Z in the app).
+const INSTRUCTIONS = `OpenMol is an independent chemical drawing app (not affiliated with ChemDraw; its keyboard shortcuts are ChemDraw-compatible) that is open in the user's web browser or desktop app. These tools edit the open document live, and every change can be undone (undo tool, or Cmd+Z in the app).
 - Start with get_document to see what is drawn (ids, SMILES, positions). After larger changes check the result with get_image (it returns a short text description first and then a PNG).
 - Coordinates: x to the right, y downwards; one bond is about 40 units long.
 - Structures are given as SMILES, or as "name:<English name>" (looked up on PubChem).

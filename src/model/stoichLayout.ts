@@ -206,6 +206,8 @@ function build(doc: Doc, t: StoichTable): TableGeom {
   // Bedingungen und Notizen unter der Tabelle
   const cond = conditionsText(t, calc)
   const extra = [cond ? `<b>${T.conditions}:</b> ${cond}` : '', t.notes?.trim() ? t.notes.trim().replace(/&/g, '&amp;').replace(/</g, '&lt;') : ''].filter(Boolean)
+  // Haftungshinweis immer unter einer gefüllten Tabelle (Mengen und GHS-Angaben sind berechnet bzw. aus PubChem)
+  if (rows.length) extra.push(`<i>${T.disclaimer}</i>`)
   // nicht breiter als die Tabelle: an Leerzeichen umbrechen (Folgezeilen enger als Tabellenzeilen)
   const maxW = Math.max(right - t.x, size * 20)
   for (const e of extra) {

@@ -3,6 +3,8 @@
 Web- und Desktop-App (Mac) zum Zeichnen von Molekülen, Reaktionen und Reaktionsmechanismen – inspiriert vom
 Funktionsumfang klassischer Chemie-Zeichenprogramme, aber mit aufgeräumter, moderner Oberfläche.
 
+> OpenMol ist ein unabhängiges Projekt und steht in keiner Verbindung zu ChemDraw oder dessen Hersteller. ChemDraw ist eine Marke ihres Inhabers; Hinweise auf ChemDraw beschreiben nur die Kompatibilität (Dateiformat CDXML) und vertraute Tastenkürzel.
+
 ## Starten
 
 - **Einfach:** `Starten.command` im Finder doppelklicken (beim ersten Mal werden die Pakete installiert).
@@ -225,6 +227,12 @@ Ansatztabellen, Inspektor ein-/ausblenden (auch ⌘\\)
   Texte mit Formatierung und Farbe, Reaktionspfeile (auch Gleichgewicht/Retro), Bedingungen über/unter dem Pfeil und
   Ausbeute, Plus-Zeichen, gebogene Elektronenpfeile, Klammern, Rechtecke und Ovale. Nicht übernommen (mit Meldung):
   Orbitale, Bilder, Spektren, einzelne Klammern; das binäre `.cdx`-Format und Einfügen direkt aus ChemDraw fehlen noch
+
+## Rechtliches
+
+- OpenMol ist ein unabhängiges Projekt und steht in keiner Verbindung zu ChemDraw oder dessen Hersteller. ChemDraw ist eine Marke ihres Inhabers; Hinweise auf ChemDraw beschreiben nur die Kompatibilität (Dateiformat CDXML) und vertraute Tastenkürzel.
+- Ohne Gewähr: Berechnete Mengen, Massen, Isotopenmuster und GHS-Angaben (aus PubChem) bitte immer prüfen, insbesondere
+  mit den Sicherheitsdatenblättern.
 
 ## Technik
 

@@ -14,6 +14,11 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { makeSelfSignedCert, thumbprint } from './selfsignedCert.mjs'
+import { menuLang } from './menu.mjs'
+
+/** Texte in der Sprache der OpenMol-Oberfläche (Dialoge, Manifest, Add-in-Seite) */
+const en = () => menuLang() === 'en'
+const tr = (de, english) => (en() ? english : de)
 
 export const ADDIN_PORT = 5185
 const ORIGIN = `https://localhost:${ADDIN_PORT}`
@@ -55,7 +60,7 @@ async function makeCert() {
     '-addext', 'keyUsage=critical,digitalSignature,keyEncipherment',
     '-addext', 'extendedKeyUsage=serverAuth',
   ])
-  if (!r.ok) throw new Error('Zertifikat konnte nicht erzeugt werden: ' + r.out)
+  if (!r.ok) throw new Error(tr('Zertifikat konnte nicht erzeugt werden: ', 'Could not create the certificate: ') + r.out)
   fs.chmodSync(keyFile(), 0o600)
 }
 
@@ -86,7 +91,7 @@ async function installManifest() {
   if (!WIN) return
   // Wert: Name und Inhalt = Pfad des Manifests (so trägt auch Microsofts Werkzeug office-addin-dev-settings ein)
   const r = await run(sys32('reg.exe'), ['add', WEF_KEY, '/v', manifestFile(), '/t', 'REG_SZ', '/d', manifestFile(), '/f'], { windowsHide: true })
-  if (!r.ok) throw new Error('Registry-Eintrag für Word fehlgeschlagen: ' + r.out)
+  if (!r.ok) throw new Error(tr('Registry-Eintrag für Word fehlgeschlagen: ', 'Registry entry for Word failed: ') + r.out)
 }
 
 function manifestXml() {
@@ -96,9 +101,9 @@ function manifestXml() {
   <Id>${ADDIN_ID}</Id>
   <Version>1.0.0.0</Version>
   <ProviderName>OpenMol</ProviderName>
-  <DefaultLocale>de-DE</DefaultLocale>
+  <DefaultLocale>${en() ? 'en-US' : 'de-DE'}</DefaultLocale>
   <DisplayName DefaultValue="OpenMol"/>
-  <Description DefaultValue="Mit OpenMol kopierte Strukturen in OpenMol bearbeiten"/>
+  <Description DefaultValue="${tr('Mit OpenMol kopierte Strukturen in OpenMol bearbeiten', 'Edit structures copied from OpenMol in OpenMol')}"/>
   <IconUrl DefaultValue="${u('icon-32.png')}"/>
   <HighResolutionIconUrl DefaultValue="${u('icon-64.png')}"/>
   <SupportUrl DefaultValue="https://github.com/monsproduction/OpenMol"/>
@@ -163,10 +168,10 @@ function manifestXml() {
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="OpenMol.Group.Label" DefaultValue="OpenMol"/>
-        <bt:String id="OpenMol.Edit.Label" DefaultValue="In OpenMol bearbeiten"/>
+        <bt:String id="OpenMol.Edit.Label" DefaultValue="${tr('In OpenMol bearbeiten', 'Edit in OpenMol')}"/>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="OpenMol.Edit.Tip" DefaultValue="Markierte, mit OpenMol kopierte Struktur in OpenMol öffnen und danach hier ersetzen"/>
+        <bt:String id="OpenMol.Edit.Tip" DefaultValue="${tr('Markierte, mit OpenMol kopierte Struktur in OpenMol öffnen und danach hier ersetzen', 'Open the selected structure (copied from OpenMol) in OpenMol and replace it here afterwards')}"/>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>
@@ -221,7 +226,7 @@ async function handle(req, res) {
     if (STATIC_FILES[name]) return send(res, 200, fs.readFileSync(path.join(STATIC, name)), STATIC_FILES[name])
     return send(res, 404, { error: 'nicht gefunden' })
   }
-  if (p === '/api/ping') return send(res, 200, { ok: true, app: 'OpenMol', version: app.getVersion() })
+  if (p === '/api/ping') return send(res, 200, { ok: true, app: 'OpenMol', version: app.getVersion(), lang: menuLang() })
   // Daten an OpenMol schicken darf nur die eigene Add-in-Seite (andere Webseiten haben eine andere Herkunft)
   if (req.method === 'POST' && p === '/api/edit') {
     if (req.headers.origin !== ORIGIN || !/json/.test(req.headers['content-type'] ?? '')) return send(res, 403, { error: 'origin' })
@@ -293,7 +298,12 @@ function certDaysLeft() {
   }
 }
 
-const PORT_BUSY = `Ein anderes Programm benutzt den Anschluss ${ADDIN_PORT} auf diesem Rechner. Bis es beendet ist, kann Word OpenMol nicht erreichen („In OpenMol bearbeiten“ meldet dann, dass OpenMol nicht antwortet).`
+const PORT_BUSY = () =>
+  tr(
+    `Ein anderes Programm benutzt den Anschluss ${ADDIN_PORT} auf diesem Rechner. Bis es beendet ist, kann Word OpenMol nicht erreichen („In OpenMol bearbeiten“ meldet dann, dass OpenMol nicht antwortet).`,
+    `Another program is using port ${ADDIN_PORT} on this computer. Until it is closed, Word cannot reach OpenMol (“Edit in OpenMol” then reports that OpenMol is not responding).`,
+  )
+const NOT_AVAILABLE = () => tr('Word-Add-in nicht verfügbar', 'Word add-in not available')
 
 /**
  * Beim Start der App: Zertifikat 30 Tage vor Ablauf erneuern (dann muss der Mac dem neuen einmal vertrauen), Server
@@ -318,7 +328,7 @@ export async function checkWordAddinOnStart(win, handlers, test) {
     console.log('[word-addin] Start', { daysLeft: days === null ? null : Math.round(days), renewed, server: state })
     return
   }
-  if (state === 'busy') await dialog.showMessageBox(win, { type: 'warning', message: 'Word-Add-in nicht verfügbar', detail: PORT_BUSY, buttons: ['OK'] })
+  if (state === 'busy') await dialog.showMessageBox(win, { type: 'warning', message: NOT_AVAILABLE(), detail: PORT_BUSY(), buttons: ['OK'] })
   else if (renewed && !(await certTrusted())) await askTrust(win, true)
 }
 
@@ -344,43 +354,64 @@ export async function setupWordAddin(win, handlers, test) {
     await installManifest()
     state = await startAddinServer(handlers)
   } catch (e) {
-    if (!test) await dialog.showMessageBox(win, { type: 'error', message: 'Word-Add-in konnte nicht eingerichtet werden', detail: String(e?.message ?? e) })
+    if (!test) await dialog.showMessageBox(win, { type: 'error', message: tr('Word-Add-in konnte nicht eingerichtet werden', 'The Word add-in could not be set up'), detail: String(e?.message ?? e) })
     return
   }
   if (test) {
     console.log('[word-addin] eingerichtet', { manifest: manifestFile(), trusted: await certTrusted(), server: state, command: trustCommand() })
     return
   }
-  if (state === 'busy') return void (await dialog.showMessageBox(win, { type: 'warning', message: 'Word-Add-in nicht verfügbar', detail: PORT_BUSY, buttons: ['OK'] }))
+  if (state === 'busy') return void (await dialog.showMessageBox(win, { type: 'warning', message: NOT_AVAILABLE(), detail: PORT_BUSY(), buttons: ['OK'] }))
   if (await certTrusted()) {
-    await dialog.showMessageBox(win, { type: 'info', message: 'Das Word-Add-in ist eingerichtet.', detail: HOW_TO, buttons: ['OK'] })
+    await dialog.showMessageBox(win, { type: 'info', message: tr('Das Word-Add-in ist eingerichtet.', 'The Word add-in is set up.'), detail: HOW_TO(), buttons: ['OK'] })
     return
   }
   await askTrust(win, false)
 }
 
-const HOW_TO = WIN
-  ? 'Word danach ganz beenden und neu starten. Im Reiter „Start“ sollte dann der Knopf „In OpenMol bearbeiten“ erscheinen. Falls nicht: Reiter „Einfügen“ ▸ „Add-Ins abrufen“ bzw. „Meine Add-Ins“ ▸ „Entwickler-Add-Ins“ ▸ „OpenMol“.'
-  : 'Word danach ganz beenden (⌘Q) und neu starten. Dann in Word: Reiter „Einfügen“, beim Knopf „Meine Add-Ins“ auf den kleinen Pfeil ▾ klicken und unter „Entwickler-Add-Ins“ „OpenMol“ wählen. Danach erscheint im Reiter „Start“ der Knopf „In OpenMol bearbeiten“.'
+const HOW_TO = () =>
+  WIN
+    ? tr(
+        'Word danach ganz beenden und neu starten. Im Reiter „Start“ sollte dann der Knopf „In OpenMol bearbeiten“ erscheinen. Falls nicht: Reiter „Einfügen“ ▸ „Add-Ins abrufen“ bzw. „Meine Add-Ins“ ▸ „Entwickler-Add-Ins“ ▸ „OpenMol“.',
+        'Then quit Word completely and start it again. The “Edit in OpenMol” button should appear on the Home tab. If not: Insert tab ▸ “Get Add-ins” or “My Add-ins” ▸ “Developer Add-ins” ▸ “OpenMol”.',
+      )
+    : tr(
+        'Word danach ganz beenden (⌘Q) und neu starten. Dann in Word: Reiter „Einfügen“, beim Knopf „Meine Add-Ins“ auf den kleinen Pfeil ▾ klicken und unter „Entwickler-Add-Ins“ „OpenMol“ wählen. Danach erscheint im Reiter „Start“ der Knopf „In OpenMol bearbeiten“.',
+        'Then quit Word completely (⌘Q) and start it again. In Word: Insert tab, click the small arrow ▾ next to “My Add-ins” and choose “OpenMol” under “Developer Add-ins”. The “Edit in OpenMol” button then appears on the Home tab.',
+      )
 
 const trustCommand = () =>
   WIN ? `certutil -user -addstore Root "${cerFile()}"` : `security add-trusted-cert -r trustRoot -p ssl -k ~/Library/Keychains/login.keychain-db "${certFile()}"`
 
 /** Vertrauen in das Zertifikat einrichten lassen (macOS fragt dafür selbst nach dem Passwort, Windows mit einer Sicherheitswarnung) */
 async function askTrust(win, renewed) {
-  const pc = WIN ? 'Windows' : 'dein Mac'
+  const pc = WIN ? 'Windows' : tr('dein Mac', 'your Mac')
   const r = await dialog.showMessageBox(win, {
     type: 'info',
-    message: renewed ? 'Das Zertifikat für das Word-Add-in wurde erneuert' : `${WIN ? 'Windows' : 'Dein Mac'} muss dem OpenMol-Zertifikat einmal vertrauen`,
+    message: renewed
+      ? tr('Das Zertifikat für das Word-Add-in wurde erneuert', 'The certificate for the Word add-in was renewed')
+      : tr(`${WIN ? 'Windows' : 'Dein Mac'} muss dem OpenMol-Zertifikat einmal vertrauen`, `${WIN ? 'Windows' : 'Your Mac'} needs to trust the OpenMol certificate once`),
     detail:
       (renewed
-        ? `Das bisherige Zertifikat lief bald ab. Damit „In OpenMol bearbeiten“ in Word weiter funktioniert, muss ${pc} dem neuen einmal vertrauen. `
-        : 'Word zeigt Add-ins nur über HTTPS an. OpenMol hat dafür ein Zertifikat erzeugt, das ausschließlich für „localhost“ (diesen Rechner) gilt und nichts anderes beglaubigen kann. ') +
+        ? tr(
+            `Das bisherige Zertifikat lief bald ab. Damit „In OpenMol bearbeiten“ in Word weiter funktioniert, muss ${pc} dem neuen einmal vertrauen. `,
+            `The previous certificate was about to expire. For “Edit in OpenMol” to keep working in Word, ${pc} needs to trust the new one once. `,
+          )
+        : tr(
+            'Word zeigt Add-ins nur über HTTPS an. OpenMol hat dafür ein Zertifikat erzeugt, das ausschließlich für „localhost“ (diesen Rechner) gilt und nichts anderes beglaubigen kann. ',
+            'Word only shows add-ins over HTTPS. OpenMol has created a certificate for this that is valid only for “localhost” (this computer) and cannot certify anything else. ',
+          )) +
       (WIN
-        ? '„Vertrauen …“ trägt es in die Zertifikate deines Windows-Benutzers ein – Windows zeigt dabei eine Sicherheitswarnung („Möchten Sie dieses Zertifikat installieren?“), die du mit „Ja“ bestätigst.\n\nAlternativ in der Eingabeaufforderung:\n'
-        : '„Vertrauen …“ trägt es in deinen Schlüsselbund ein – macOS fragt dabei nach deinem Passwort.\n\nAlternativ im Terminal:\n') +
+        ? tr(
+            '„Vertrauen …“ trägt es in die Zertifikate deines Windows-Benutzers ein – Windows zeigt dabei eine Sicherheitswarnung („Möchten Sie dieses Zertifikat installieren?“), die du mit „Ja“ bestätigst.\n\nAlternativ in der Eingabeaufforderung:\n',
+            '“Trust …” adds it to the certificates of your Windows user – Windows shows a security warning (“Do you want to install this certificate?”), which you confirm with “Yes”.\n\nAlternatively in the command prompt:\n',
+          )
+        : tr(
+            '„Vertrauen …“ trägt es in deinen Schlüsselbund ein – macOS fragt dabei nach deinem Passwort.\n\nAlternativ im Terminal:\n',
+            '“Trust …” adds it to your keychain – macOS asks for your password.\n\nAlternatively in Terminal:\n',
+          )) +
       trustCommand(),
-    buttons: ['Vertrauen …', 'Befehl in Zwischenablage', 'Später'],
+    buttons: [tr('Vertrauen …', 'Trust …'), tr('Befehl in Zwischenablage', 'Copy command'), tr('Später', 'Later')],
     cancelId: 2,
   })
   if (r.response === 1) {
@@ -396,8 +427,23 @@ async function askTrust(win, renewed) {
   const ok = await certTrusted()
   await dialog.showMessageBox(win, {
     type: ok ? 'info' : 'warning',
-    message: ok ? 'Fertig – das Word-Add-in ist eingerichtet.' : 'Das Zertifikat ist noch nicht vertrauenswürdig.',
-    detail: ok ? (renewed ? 'Word einmal neu starten.' : HOW_TO) : (t.out || 'Abgebrochen?') + `\n\nBefehl zum Wiederholen ${WIN ? 'in der Eingabeaufforderung' : 'im Terminal'}:\n` + trustCommand(),
+    message: ok ? tr('Fertig – das Word-Add-in ist eingerichtet.', 'Done – the Word add-in is set up.') : tr('Das Zertifikat ist noch nicht vertrauenswürdig.', 'The certificate is not trusted yet.'),
+    detail: ok
+      ? renewed
+        ? tr('Word einmal neu starten.', 'Restart Word once.')
+        : HOW_TO()
+      : (t.out || tr('Abgebrochen?', 'Cancelled?')) +
+        tr(`\n\nBefehl zum Wiederholen ${WIN ? 'in der Eingabeaufforderung' : 'im Terminal'}:\n`, `\n\nCommand to retry ${WIN ? 'in the command prompt' : 'in Terminal'}:\n`) +
+        trustCommand(),
     buttons: ['OK'],
   })
+}
+
+/**
+ * Sprache der Oberfläche geändert: Manifest neu schreiben (nur wenn das Add-in eingerichtet ist), damit Word die Knöpfe
+ * nach dem nächsten Neustart in dieser Sprache zeigt
+ */
+export function refreshAddinManifest() {
+  if (!SUPPORTED || !fs.existsSync(certFile()) || !fs.existsSync(manifestFile())) return
+  installManifest().catch((e) => console.error('OpenMol: Word-Add-in-Manifest', e))
 }

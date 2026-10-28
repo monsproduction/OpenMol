@@ -67,12 +67,13 @@
   </head>
   <body>
     <header><img src="icon-64.png" alt="" /><b>OpenMol</b></header>
+    <!-- Texte setzt taskpane.js in der Sprache der OpenMol-Oberfläche -->
     <button id="edit" disabled>In OpenMol bearbeiten</button>
-    <div id="status">Lädt …</div>
+    <div id="status">…</div>
     <ol>
-      <li>Ein aus OpenMol kopiertes Bild in Word anklicken.</li>
-      <li>„In OpenMol bearbeiten“ – OpenMol öffnet die Zeichnung.</li>
-      <li>In OpenMol ändern und oben „Zurück nach Word“ klicken – das Bild hier wird ersetzt.</li>
+      <li id="step1"></li>
+      <li id="step2"></li>
+      <li id="step3"></li>
     </ol>
     <div id="conn"></div>
     <script src="taskpane.js"></script>

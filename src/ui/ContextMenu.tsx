@@ -150,7 +150,7 @@ function entries(at: { x: number; y: number }, pick: boolean): Entry[] {
               'sep',
               { label: 'Atome nummerieren', tip: 'Nach vereinfachten IUPAC-Regeln (für NMR-Zuordnungen) – Vorschlag, bitte prüfen', action: mol(autoNumberAtoms) },
               { label: 'Atomnummern entfernen', action: mol(clearAtomNumbers) },
-              { label: 'Alle vier', action: mol(() => insertAnalysis(['name', 'formula', 'exact', 'mw'])) },
+              { label: 'Name, Formel und Massen', action: mol(() => insertAnalysis(['name', 'formula', 'exact', 'mw'])) },
             ],
           },
           'sep',

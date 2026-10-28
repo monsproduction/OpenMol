@@ -97,6 +97,8 @@ export function runMenuCommand(cmd: string) {
     anMw: () => insertAnalysis(['mw']),
     anExact: () => insertAnalysis(['exact']),
     anAll: () => insertAnalysis(['name', 'formula', 'exact', 'mw']),
+    anName: () => insertAnalysis(['name']),
+    anIsotopes: () => insertAnalysis(['isotopes']),
     fit: () => fitView(),
     zoomIn: () => zoomTo(zoom * 1.25),
     zoomOut: () => zoomTo(zoom / 1.25),

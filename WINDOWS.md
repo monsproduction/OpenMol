@@ -126,7 +126,7 @@ Stammzertifizierungsstellen“ ▸ „OpenMol localhost“ löschen, Ordner `%AP
 
 Projektordner in Claude Code öffnen und z. B. einfügen:
 
-> Das ist OpenMol (ChemDraw-Nachbau, Electron-App). Auf dem Mac funktioniert der Austausch mit Word: Strg/⌘+C legt
+> Das ist OpenMol (Zeichenprogramm für chemische Strukturen, Electron-App). Auf dem Mac funktioniert der Austausch mit Word: Strg/⌘+C legt
 > ein PNG mit den Zeichnungsdaten (tEXt-Block „openmol“, „OM1:…“) ab, und ein Word-Add-in (electron/wordAddin.mjs,
 > electron/addin/) öffnet markierte Bilder in OpenMol und ersetzt sie danach. Die Windows-Teile sind eingebaut und
 > seit 2026-10-26 getestet (zum Nachschlagen): electron/clipboard.mjs (writePng: Rohformat „PNG“),

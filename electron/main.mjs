@@ -8,10 +8,10 @@ import { scanClipboard, writePng } from './clipboard.mjs'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { buildMenu, setMenuLang } from './menu.mjs'
+import { buildMenu, menuLang, setMenuLang } from './menu.mjs'
 import { initStore } from './store.mjs'
 import { checkForUpdates, scheduleAutoCheck } from './updater.mjs'
-import { checkWordAddinOnStart, setResult, setupWordAddin } from './wordAddin.mjs'
+import { checkWordAddinOnStart, refreshAddinManifest, setResult, setupWordAddin } from './wordAddin.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const DIST = path.join(here, '..', 'dist')
@@ -374,8 +374,11 @@ function registerIpc() {
 
   // Sprache der Oberfläche → Menüleiste neu aufbauen
   ipcMain.on('openmol:ui-lang', (_e, l) => {
+    const changed = l !== menuLang()
     setMenuLang(l)
     Menu.setApplicationMenu(buildMenu(() => win, menuActions))
+    // Word-Add-in in derselben Sprache (wirkt nach einem Neustart von Word)
+    if (changed) refreshAddinManifest()
   })
 
   // KI-Steuerung: der mitgelieferte MCP-Server; OpenMol selbst führt ihn aus (ELECTRON_RUN_AS_NODE=1 → wie Node.js),

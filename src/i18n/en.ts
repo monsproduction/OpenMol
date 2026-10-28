@@ -220,6 +220,8 @@ export const EN: Record<string, string> = {
   Benzol: 'Benzene',
   'Benzol (R / J)': 'Benzene (R / J)',
   'Nichts zu drucken': 'Nothing to print',
+  'OpenMol ist ein unabhängiges Projekt und steht in keiner Verbindung zu ChemDraw oder dessen Hersteller. ChemDraw ist eine Marke ihres Inhabers; Hinweise auf ChemDraw beschreiben nur die Kompatibilität (Dateiformat CDXML) und vertraute Tastenkürzel.':
+    'OpenMol is an independent project and is not affiliated with ChemDraw or its maker. ChemDraw is a trademark of its owner; references to ChemDraw only describe compatibility (CDXML file format) and familiar keyboard shortcuts.',
   'Gruppieren / Gruppierung aufheben': 'Group / ungroup',
   'Sperren / Alle entsperren': 'Lock / unlock all',
   'Atome nummerieren (NMR-Zuordnung)': 'Number atoms (NMR assignment)',
@@ -567,7 +569,7 @@ export const EN: Record<string, string> = {
   'Werte als Text unter das Molekül setzen': 'Put values as text under the molecule',
   Name: 'Name',
   Molekulargewicht: 'Molecular weight',
-  'Alle vier': 'All four',
+  'Name, Formel und Massen': 'Name, formula and masses',
   'Struktur bereinigen': 'Clean up structure',
   'Regelmäßige Ringe, ideale Winkel, keine Überlappungen': 'Regular rings, ideal angles, no overlaps',
   'Moleküle, Pfeile und Bedingungen ordentlich ausrichten': 'Neatly align molecules, arrows and conditions',
