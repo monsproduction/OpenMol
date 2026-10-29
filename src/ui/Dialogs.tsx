@@ -35,7 +35,7 @@ import { SECTION_IDS, resetSectionOrder, useSectionOrder } from './inspectorOrde
 import { desktop, type McpInfo } from '../desktop'
 import { claudeCodeCommand, mcpConfigJson, mcpPrompt } from '../mcpSetup'
 
-export function Modal({ title, children, onClose, wide }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean }) {
+export function Modal({ title, children, onClose, wide, className }: { title: string; children: React.ReactNode; onClose: () => void; wide?: boolean; className?: string }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => {
       // Felder mit eigenem Esc (z. B. Umbenennen) behandeln die Taste selbst
@@ -51,7 +51,7 @@ export function Modal({ title, children, onClose, wide }: { title: string; child
   }, [onClose])
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={'modal' + (wide ? ' wide' : '')} role="dialog" aria-label={title}>
+      <div className={'modal' + (wide ? ' wide' : '') + (className ? ' ' + className : '')} role="dialog" aria-label={title}>
         <header>
           <h2>{title}</h2>
           <button className="icon-btn" onClick={onClose} aria-label="Schließen">
@@ -531,7 +531,7 @@ function SettingsDialog() {
   // Desktop-App: mitgelieferter MCP-Server (Pfade für die Einrichtung der KI-Anwendung)
   const [mcp] = useState(() => desktop?.mcpInfo())
   return (
-    <Modal title="Einstellungen" onClose={close}>
+    <Modal title="Einstellungen" onClose={close} className="settings-modal">
       <div className="settings-rows">
         <h4 className="set-group">Allgemein</h4>
         <SRow label="Sprache">

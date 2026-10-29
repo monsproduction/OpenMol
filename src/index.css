@@ -621,7 +621,7 @@ textarea {
 /* ---------- Inspektor ---------- */
 
 .inspector {
-  width: 296px;
+  width: 360px;
   flex-shrink: 0;
   background: var(--panel);
   border-left: 1px solid var(--border);
@@ -1206,6 +1206,11 @@ body.dragging-section * {
 
 .modal.wide {
   width: 860px;
+}
+
+/* Einstellungen: breit genug für die zweispaltigen Zeilen ohne waagerechtes Scrollen */
+.modal.settings-modal {
+  width: 580px;
 }
 
 .modal header {
