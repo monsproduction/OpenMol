@@ -1,6 +1,8 @@
-// Knopf „Über OpenMol“: wechselndes Symbol und wechselnder Satz – beide im selben zufälligen Takt (4–10 s), damit
-// Knopf und Fenster zusammenpassen. Ein gemeinsamer Zeitgeber für alle Anzeigen (useSupportTick).
+// Knopf „Über OpenMol“: wechselndes Symbol und wechselnder Satz – beide im selben Takt, damit Knopf und Fenster
+// zusammenpassen. Gewechselt wird frühestens nach 5 Stunden; Stand und Zeitpunkt werden gespeichert, damit ein Neustart
+// nicht sofort ein neues Symbol bringt. Ein gemeinsamer Zeitgeber für alle Anzeigen (useSupportTick).
 import { useSyncExternalStore } from 'react'
+import { lsGet, lsSet } from '../storage'
 
 /** Symbole des Knopfs (Kaffee, KI-Funke für „Token“, Dollar, Euro, winkende Hand, Händedruck) */
 export const SUPPORT_ICONS = ['☕', '✨', '💵', '💶', '👋', '🤝']
@@ -41,32 +43,59 @@ export const SUPPORT_SENTENCES: Record<'de' | 'en', string[]> = {
 
 // ---------- gemeinsamer Zeitgeber ----------
 
-let state = { icon: Math.floor(Math.random() * SUPPORT_ICONS.length), sentence: Math.floor(Math.random() * 1000) }
-const listeners = new Set<() => void>()
-let timer: ReturnType<typeof setTimeout> | null = null
+/** Mindestdauer, bis Symbol und Satz wechseln */
+const MIN_SHOW_MS = 5 * 60 * 60 * 1000
+const KEY = 'openmol:support-tick'
 
 /** anderer Index als bisher (bei mehr als einem Eintrag) */
 const another = (cur: number, n: number) => (n < 2 ? 0 : (cur + 1 + Math.floor(Math.random() * (n - 1))) % n)
 
-function schedule() {
-  // zufälliger Abstand 4–10 s
-  timer = setTimeout(
-    () => {
-      state = { icon: another(state.icon, SUPPORT_ICONS.length), sentence: another(state.sentence % 1000, 1000) }
-      for (const l of listeners) l()
-      schedule()
-    },
-    4000 + Math.random() * 6000,
-  )
+type Tick = { icon: number; sentence: number; t: number }
+
+function load(): Tick | null {
+  try {
+    const v = JSON.parse(lsGet(KEY) ?? 'null') as Tick | null
+    if (v && [v.icon, v.sentence, v.t].every(Number.isFinite) && v.t <= Date.now()) {
+      return { icon: Math.abs(Math.trunc(v.icon)) % SUPPORT_ICONS.length, sentence: Math.abs(Math.trunc(v.sentence)) % 1000, t: v.t }
+    }
+  } catch {
+    // kaputter Wert: neu auswürfeln
+  }
+  return null
+}
+
+function next(prev: Tick | null): Tick {
+  const t: Tick = prev
+    ? { icon: another(prev.icon, SUPPORT_ICONS.length), sentence: another(prev.sentence, 1000), t: Date.now() }
+    : { icon: Math.floor(Math.random() * SUPPORT_ICONS.length), sentence: Math.floor(Math.random() * 1000), t: Date.now() }
+  lsSet(KEY, JSON.stringify(t))
+  return t
+}
+
+let state: Tick = (() => {
+  const v = load()
+  return v && Date.now() - v.t < MIN_SHOW_MS ? v : next(v)
+})()
+const listeners = new Set<() => void>()
+let timer: ReturnType<typeof setInterval> | null = null
+
+/** jede Minute nach der Uhr prüfen (übersteht auch Ruhezustand und gedrosselte Zeitgeber) */
+function check() {
+  if (Date.now() - state.t < MIN_SHOW_MS) return
+  state = next(state)
+  for (const l of listeners) l()
 }
 
 function subscribe(l: () => void) {
   listeners.add(l)
-  if (!timer) schedule()
+  if (!timer) {
+    check()
+    timer = setInterval(check, 60_000)
+  }
   return () => {
     listeners.delete(l)
     if (!listeners.size && timer) {
-      clearTimeout(timer)
+      clearInterval(timer)
       timer = null
     }
   }

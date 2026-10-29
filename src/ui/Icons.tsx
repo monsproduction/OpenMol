@@ -253,8 +253,8 @@ const ICONS: Record<string, ReactElement> = {
   ),
   equilibrium: (
     <g>
-      <path {...S} d="M2.5 8h12M5.5 12h12" />
-      <path d="M17.5 8l-5-3.2.9 3.2z M2.5 12l5 3.2-.9-3.2z" fill="currentColor" />
+      <path {...S} strokeLinecap="butt" d="M3 8.6h11M6 11.4h11" />
+      <path d="M18 9.4L10.6 5.4Q11.6 6.9 11.5 8.6V9.4z M2 10.6l7.4 4Q8.4 13.1 8.5 11.4V10.6z" fill="currentColor" />
     </g>
   ),
   resonance: (

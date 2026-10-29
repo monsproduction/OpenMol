@@ -24,7 +24,7 @@ const open = (url: string) => {
   else window.open(url, '_blank', 'noopener')
 }
 
-/** Knopf in der oberen Leiste: Symbol wechselt im zufälligen Takt (Kaffee, Funke, Dollar, Euro, Winken, Händedruck) */
+/** Knopf in der oberen Leiste: Symbol wechselt frühestens nach 5 Stunden (Kaffee, Funke, Dollar, Euro, Winken, Händedruck) */
 export function AboutButton() {
   const lang = useSettings().uiLang
   const { icon } = useSupportTick(lang)

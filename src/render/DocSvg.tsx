@@ -545,18 +545,31 @@ function ArrowShape({ doc, ar }: { doc: Doc; ar: Arrow }) {
     const d = norm(sub(e, s))
     const n = perp(d)
     if (ar.kind === 'equilibrium') {
-      // wie in ChemDraw: zwei eng beieinander liegende Linien, jede mit einer langen, schlanken Halbspitze nach außen;
-      // die Linie läuft bis in die Spitze
-      const g = lw * 1.35
-      const he = hs * 1.9
-      const s1 = add(s, mul(n, g))
+      // wie in ChemDraw (vermessen an einem ChemDraw-Bild, Maße in Linienstärken): Linienmitten 3 lw auseinander, je eine
+      // lange, schlanke Halbspitze nach außen (Länge 20 lw, Widerhaken 5,4 lw über der Linienmitte), deren gerade Kante
+      // bündig mit der Innenkante der Linie zur Spitze läuft; Hinterkante leicht geschwungen; das spitzenlose Ende jeder
+      // Linie endet 1,3 lw vor der Spitze der anderen
+      const g = lw * 1.5
+      // bei sehr kurzen Pfeilen kleiner, damit sich die Spitzen nicht überlappen
+      const L = Math.min(lw * 20, dist(s, e) * 0.45)
+      const W = Math.min(lw * 5.4, L * 0.27)
+      const inset = lw * 1.3
+      const half = (tip: Pt, dir: Pt, out: Pt, key: string) => {
+        // tip liegt auf der Linienmitte; Spitze auf die Innenkante
+        const t = sub(tip, mul(out, lw / 2))
+        const back = sub(tip, mul(dir, L))
+        const barb = add(back, mul(out, W))
+        const meet = add(sub(tip, mul(dir, L * 0.89)), mul(out, lw / 2))
+        const ctrl = add(sub(tip, mul(dir, L * 0.89)), mul(out, lw / 2 + (W - lw / 2) * 0.55))
+        const foot = sub(sub(tip, mul(dir, L * 0.89)), mul(out, lw / 2))
+        els.push(<path key={key} d={`M${P(t)} L${P(barb)} Q${P(ctrl)} ${P(meet)} L${P(foot)} Z`} fill={color} />)
+      }
       const e1 = add(e, mul(n, g))
       const s2 = sub(s, mul(n, g))
-      const e2 = sub(e, mul(n, g))
-      shaft(s1, sub(e1, mul(d, lw * 0.6)), 'a')
-      shaft(add(s2, mul(d, lw * 0.6)), e2, 'b')
-      els.push(<path key="h1" d={headPath(e1, d, he, 'left', 0.36)} fill={color} />)
-      els.push(<path key="h2" d={headPath(s2, mul(d, -1), he, 'left', 0.36)} fill={color} />)
+      shaft(add(add(s, mul(n, g)), mul(d, inset)), sub(e1, mul(d, L * 0.5)), 'a')
+      shaft(add(s2, mul(d, L * 0.5)), sub(sub(e, mul(n, g)), mul(d, inset)), 'b')
+      half(e1, d, n, 'h1')
+      half(s2, mul(d, -1), mul(n, -1), 'h2')
     } else if (ar.kind === 'retro') {
       const g = lw * 2.6
       const tipBack = sub(e, mul(d, g * 1.6))
