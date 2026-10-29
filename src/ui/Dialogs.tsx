@@ -905,6 +905,9 @@ function HelpDialog() {
       </div>
       <p className="muted small legal-note">OpenMol ist ein unabhängiges Projekt und steht in keiner Verbindung zu ChemDraw oder dessen Hersteller. ChemDraw ist eine Marke ihres Inhabers; Hinweise auf ChemDraw beschreiben nur die Kompatibilität (Dateiformat CDXML) und vertraute Tastenkürzel.</p>
       <footer>
+        <button className="link-btn help-about" onClick={() => setState({ dialog: 'about' })}>
+          Über OpenMol · Impressum · Datenschutz · Lizenzen
+        </button>
         <button className="btn primary" onClick={close}>
           Verstanden
         </button>

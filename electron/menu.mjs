@@ -176,7 +176,7 @@ export function buildMenu(getWin, actions = {}) {
           {
             label: app.name,
             submenu: [
-              // eigenes Fenster „Über OpenMol“ (unterstützen, Kontakt, Impressum, Lizenzen) statt des Systemfensters
+              // eigenes Fenster „Über OpenMol“ (Kontakt, Impressum, Lizenzen) statt des Systemfensters
               item(t.about, 'about'),
               { label: t.updates, click: () => actions.checkUpdates?.() },
               { type: 'separator' },

@@ -1,9 +1,8 @@
-// „Über OpenMol“: wechselnder Satz und Unterstützen-Knopf (PayPal), Kontakt, Impressum, Datenschutz, Lizenzen der
-// verwendeten Bausteine und Haftungshinweis. Persönliche Angaben in src/legal/config.ts.
+// „Über OpenMol“ (App-Menü bzw. Hilfe-Fenster): Kontakt, Impressum, Datenschutz, Lizenzen der verwendeten Bausteine und
+// Haftungshinweis. Persönliche Angaben in src/legal/config.ts.
 import { useEffect, useState } from 'react'
 import { desktop } from '../desktop'
 import { LEGAL } from '../legal/config'
-import { useSupportTick } from '../legal/support'
 import { disclaimer, impressum, privacy, type LegalSection } from '../legal/texts'
 import { useSettings } from '../settings'
 import { setState } from '../store'
@@ -22,20 +21,6 @@ interface ThirdParty {
 const open = (url: string) => {
   if (desktop) void desktop.openExternal(url)
   else window.open(url, '_blank', 'noopener')
-}
-
-/** Knopf in der oberen Leiste: Symbol wechselt frühestens nach 5 Stunden (Kaffee, Funke, Dollar, Euro, Winken, Händedruck) */
-export function AboutButton() {
-  const lang = useSettings().uiLang
-  const { icon } = useSupportTick(lang)
-  return (
-    <button className="about-btn" onClick={() => setState({ dialog: 'about' })} data-tip="Über OpenMol – unterstützen, Kontakt, Impressum, Lizenzen">
-      <span key={icon} className="about-icon" aria-hidden="true">
-        {icon}
-      </span>
-      <span className="about-label">Über OpenMol</span>
-    </button>
-  )
 }
 
 function Sections({ list }: { list: LegalSection[] }) {
@@ -99,7 +84,6 @@ function Licenses({ lang }: { lang: 'de' | 'en' }) {
 
 export function AboutDialog() {
   const lang = useSettings().uiLang
-  const { icon, sentence } = useSupportTick(lang)
   const [view, setView] = useState<View>('main')
   const de = lang === 'de'
   const close = () => setState({ dialog: null })
@@ -115,23 +99,7 @@ export function AboutDialog() {
     <Modal title={titles[view]} onClose={close} wide={view !== 'main'}>
       {view === 'main' ? (
         <div className="about">
-          <div className="about-quote">
-            <span key={icon} className="about-quote-icon" aria-hidden="true">
-              {icon}
-            </span>
-            <p key={sentence} className="about-sentence">
-              {sentence}
-            </p>
-          </div>
-          <button
-            className="btn primary about-paypal"
-            disabled={!LEGAL.paypal}
-            onClick={() => LEGAL.paypal && open(LEGAL.paypal)}
-            data-tip={LEGAL.paypal ? 'Öffnet PayPal im Browser – Betrag frei wählbar' : 'Der PayPal-Link wird noch eingetragen'}
-          >
-            PayPal
-            <span className="about-paypal-me">.me</span>
-          </button>
+          <p className="about-title">OpenMol</p>
           <p className="about-contact">
             {de ? 'Feedback, Fehler, Ideen? Schreib mir: ' : 'Feedback, bugs, ideas? Write to me: '}
             <button className="link-btn" onClick={() => open('mailto:' + LEGAL.email)}>

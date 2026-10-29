@@ -58,7 +58,7 @@ export function privacy(lang: Lang): LegalSection[] {
           'Update check (desktop app): once a day a request to GitHub (GitHub, Inc., USA) asks whether a new version exists; updates are downloaded from GitHub. Can be switched off in the settings.',
           'Word add-in: runs inside Microsoft Word, which loads Microsoft’s Office library for it. The connection between Word and OpenMol stays on your computer (localhost).',
           'AI control (MCP): runs locally. What the connected AI application does with the drawing is governed by its provider.',
-          'Support button and email: the link opens PayPal in your browser or your email program; their privacy policies apply. OpenMol itself transmits nothing.',
+          'Email: the link opens your email program; its provider’s privacy policy applies. OpenMol itself transmits nothing.',
           'Legal basis: Art. 6(1)(b) and (f) GDPR – you request the function, and we have a legitimate interest in offering it.',
         ],
       },
@@ -96,7 +96,7 @@ export function privacy(lang: Lang): LegalSection[] {
         'Update-Prüfung (Desktop-App): einmal täglich fragt OpenMol bei GitHub (GitHub, Inc., USA) nach einer neuen Version; Updates werden von GitHub geladen. Abschaltbar in den Einstellungen.',
         'Word-Add-in: läuft in Microsoft Word, das dafür die Office-Bibliothek von Microsoft lädt. Die Verbindung zwischen Word und OpenMol bleibt auf deinem Rechner (localhost).',
         'KI-Steuerung (MCP): läuft lokal. Was die verbundene KI-Anwendung mit der Zeichnung macht, regelt deren Anbieter.',
-        'Unterstützen-Knopf und E-Mail: Der Link öffnet PayPal in deinem Browser bzw. dein E-Mail-Programm; es gelten deren Datenschutzbestimmungen. OpenMol selbst überträgt dabei nichts.',
+        'E-Mail: Der Link öffnet dein E-Mail-Programm; es gelten die Datenschutzbestimmungen deines Anbieters. OpenMol selbst überträgt dabei nichts.',
         'Rechtsgrundlage: Art. 6 Abs. 1 lit. b und f DSGVO – du forderst die Funktion an, und wir haben ein berechtigtes Interesse, sie anzubieten.',
       ],
     },
@@ -129,7 +129,7 @@ export function disclaimer(lang: Lang): LegalSection[] {
           'Liability for intent and gross negligence remains unaffected.',
         ],
       },
-      { h: 'External links', p: ['We are not responsible for the content of linked external pages (e.g. PubChem, Wikipedia, PayPal).'] },
+      { h: 'External links', p: ['We are not responsible for the content of linked external pages (e.g. PubChem, Wikipedia).'] },
       {
         h: 'Trademarks',
         p: [
@@ -145,7 +145,7 @@ export function disclaimer(lang: Lang): LegalSection[] {
         'Die Haftung für Vorsatz und grobe Fahrlässigkeit bleibt unberührt.',
       ],
     },
-    { h: 'Externe Links', p: ['Für die Inhalte verlinkter fremder Seiten (z. B. PubChem, Wikipedia, PayPal) sind deren Betreiber verantwortlich.'] },
+    { h: 'Externe Links', p: ['Für die Inhalte verlinkter fremder Seiten (z. B. PubChem, Wikipedia) sind deren Betreiber verantwortlich.'] },
     {
       h: 'Marken',
       p: [
