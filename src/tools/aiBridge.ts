@@ -10,7 +10,7 @@ import { computeTable, lookupRowCas, parseQty, rowFromName, rowMW } from '../mod
 import { richPlain } from '../model/richtext'
 import type { Arrow, ArrowKind, Doc, Id, Selection, StoichRole, StoichRow, StoichTable } from '../model/types'
 import { STYLE_PRESETS, emptySelection, uid } from '../model/types'
-import { commit, getState, openTab, redo, setState, undo } from '../store'
+import { bypassLocks, commit, getState, openTab, redo, setState, undo } from '../store'
 import { cleanStructure, completeSel, contractGroups, createStoichTable, fitView, insertStructureText, selectAll } from './actions'
 import { cleanReaction } from './cleanup'
 import { buildCdxml } from './cdxml'
@@ -79,7 +79,7 @@ export function startAiBridge() {
         const cmd = (await r.json()) as { id: number; tool: string; args: Record<string, unknown> }
         let msg: { id: number; ok: boolean; result?: unknown; error?: string }
         try {
-          msg = { id: cmd.id, ok: true, result: await runTool(cmd.tool, cmd.args ?? {}) }
+          msg = { id: cmd.id, ok: true, result: await bypassLocks(() => runTool(cmd.tool, cmd.args ?? {})) }
         } catch (e) {
           msg = { id: cmd.id, ok: false, error: e instanceof Error ? e.message : String(e) }
         }
@@ -643,4 +643,4 @@ async function runTool(name: string, a: Args): Promise<unknown> {
 }
 
 // für Tests im Entwicklungsmodus
-export const __runTool = runTool
+export const __runTool = (name: string, a: Args) => bypassLocks(() => runTool(name, a))

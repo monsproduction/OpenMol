@@ -4,6 +4,7 @@ import { useSyncExternalStore } from 'react'
 import type { ClipData } from './model/ops'
 import type { Doc, Id, Selection } from './model/types'
 import { emptyDoc, emptySelection, normalizeDoc, uid } from './model/types'
+import { touchesLocked } from './model/groups'
 
 setAutoFreeze(false)
 
@@ -321,15 +322,34 @@ export function setCommitHook(f: ((d: Doc, before: Doc) => void) | null) {
   commitHook = f
 }
 
-export function commit(recipe: (d: Doc) => void | Selection, opts: { keepSel?: boolean } = {}) {
+/** die KI-Steuerung darf Gesperrtes ändern (sie handelt auf ausdrückliche Anweisung); siehe aiBridge.ts */
+let lockBypass = 0
+export async function bypassLocks<T>(f: () => Promise<T>): Promise<T> {
+  lockBypass++
+  try {
+    return await f()
+  } finally {
+    lockBypass--
+  }
+}
+const lockedMsg = 'Gesperrt – zum Ändern erst entsperren (Rechtsklick ▸ „Alle entsperren“, ⇧⌘L)'
+
+/** false, wenn die Änderung abgelehnt wurde, weil sie Gesperrtes verändern würde */
+export function commit(recipe: (d: Doc) => void | Selection, opts: { keepSel?: boolean } = {}): boolean {
   let newSel: Selection | undefined
-  const next = produce(state.doc, (d) => {
+  const before = state.doc
+  const mid = produce(before, (d) => {
     const r = recipe(d as Doc)
-    commitHook?.(d as Doc, state.doc)
     // nur echte Auswahl-Objekte übernehmen (versehentliche Rückgabewerte ignorieren)
     if (r && typeof r === 'object' && Array.isArray((r as Selection).atoms) && Array.isArray((r as Selection).bonds)) newSel = { ...emptySelection(), ...r }
   })
-  if (next === state.doc) return
+  // geprüft wird vor dem Abgleich im commitHook: dass z. B. eine gesperrte Ansatztabelle dem Pfeil folgt, ist gewollt
+  if (!lockBypass && touchesLocked(before, mid)) {
+    toast(lockedMsg)
+    return false
+  }
+  const next = commitHook ? produce(mid, (d) => commitHook!(d as Doc, before)) : mid
+  if (next === state.doc) return true
   state = {
     ...state,
     doc: next,
@@ -340,6 +360,7 @@ export function commit(recipe: (d: Doc) => void | Selection, opts: { keepSel?: b
   }
   scheduleSave()
   emit()
+  return true
 }
 
 // ---------- Transaktionen (Ziehen) ----------
@@ -365,6 +386,13 @@ export function endTx(sel?: Selection) {
   txBase = null
   if (state.doc === base) {
     if (sel) setState({ sel })
+    return
+  }
+  // z. B. ein Molekül auf ein gesperrtes gezogen und dort verschmolzen: Ziehen zurücknehmen
+  if (!lockBypass && touchesLocked(base, state.doc)) {
+    state = { ...state, doc: base }
+    emit()
+    toast(lockedMsg)
     return
   }
   state = {

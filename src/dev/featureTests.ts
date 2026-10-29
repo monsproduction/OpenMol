@@ -12,7 +12,7 @@ import { buildCdxml } from '../tools/cdxml'
 import { importCdxml } from '../tools/cdxmlImport'
 import { decodeClipFull, encodeClipPayload } from '../tools/clipData'
 import { exportSvgString, imageWithClipData, pdfHtml, renderPng } from '../tools/io'
-import { commit, getState, openTab, redo, replaceDoc, setState, switchTab, undo } from '../store'
+import { beginTx, commit, endTx, getState, liveUpdate, openTab, redo, replaceDoc, setState, switchTab, undo } from '../store'
 import { lsGet } from '../storage'
 import { __runTool } from '../tools/aiBridge'
 import {
@@ -658,6 +658,56 @@ export async function run3(seed = 7): Promise<string[]> {
     check('Werte bereinigt', a.scale === undefined && a.num === undefined && a.numOff === undefined && a.chargeOff === undefined && a.color === undefined, JSON.stringify(a))
     await __runTool('edit_objects', { operations: [{ op: 'update', kind: 'atoms', id, data: { num: 5 } }] } as never)
     check('Zahl als Nummer → Text', doc().atoms[id].num === '5')
+  })
+
+  await T('Sperre verhindert Anbauen und Ändern', async () => {
+    replaceDoc(emptyDoc(), 'Sperre')
+    await insertStructureText('c1ccccc1', { x: 0, y: 0 })
+    await insertStructureText('CCO', { x: 300, y: 0 })
+    const benz = Object.keys(doc().atoms).filter((id) => doc().atoms[id].x < 150)
+    const free = Object.keys(doc().atoms).filter((id) => doc().atoms[id].x >= 150)
+    setState({ sel: completeSel(doc(), { ...emptySelection(), atoms: benz }) })
+    lockSelection()
+    const a0 = benz[0]
+    const snap = JSON.stringify([doc().atoms, doc().bonds, doc().fills])
+    const n = getState().past.length
+    const tries: [string, (d: Doc) => void][] = [
+      ['Atom anbauen', (d) => {
+        d.atoms.nx = { id: 'nx', x: 0, y: -80, element: 'C', charge: 0, radical: 0, lonePairs: 0 }
+        d.bonds.nb = { id: 'nb', a1: a0, a2: 'nx', type: 'single', doublePos: 'auto' }
+      }],
+      ['Bindung zum freien Molekül', (d) => void (d.bonds.nb = { id: 'nb', a1: a0, a2: free[0], type: 'single', doublePos: 'auto' })],
+      ['Bindung im Ring ändern', (d) => void (d.bonds[Object.keys(d.bonds).find((id) => benz.includes(d.bonds[id].a1))!].type = 'triple')],
+      ['Element', (d) => void (d.atoms[a0].element = 'N')],
+      ['Nummer', (d) => void (d.atoms[a0].num = '1')],
+      ['Ladung', (d) => void (d.atoms[a0].charge = 1)],
+      ['Atom löschen', (d) => void delete d.atoms[a0]],
+      ['Ringfüllung', (d) => void (d.fills.f1 = { id: 'f1', rings: [benz], mode: 'fill', grad: 'none', c1: '#ff0000' } as never)],
+    ]
+    for (const [name, f] of tries) {
+      const ok = commit(f)
+      check('gesperrt: ' + name + ' abgelehnt', !ok && JSON.stringify([doc().atoms, doc().bonds, doc().fills]) === snap)
+    }
+    check('kein Rückgängig-Schritt durch Abgelehntes', getState().past.length === n)
+    // Ziehen: freies Molekül auf ein gesperrtes Atom ziehen und dort verschmelzen → ganzes Ziehen zurück
+    const base = doc()
+    beginTx()
+    liveUpdate((d) => {
+      for (const id of free) d.atoms[id].x -= 300
+      for (const b of Object.values(d.bonds)) if (b.a1 === free[0]) b.a1 = a0
+      for (const b of Object.values(d.bonds)) if (b.a2 === free[0]) b.a2 = a0
+      delete d.atoms[free[0]]
+    })
+    endTx()
+    check('gesperrt: Verschmelzen beim Ziehen zurückgenommen', doc() === base)
+    // Freies bleibt bearbeitbar, auch Neues neben dem Gesperrten
+    check('freies Molekül änderbar', commit((d) => void (d.atoms[free[1]].element = 'N')))
+    check('neues Molekül möglich', commit((d) => void (d.atoms.solo = { id: 'solo', x: 0, y: 200, element: 'C', charge: 0, radical: 0, lonePairs: 0 })))
+    // die KI darf weiterhin (ausdrückliche Anweisung)
+    await __runTool('edit_objects', { operations: [{ op: 'update', kind: 'atoms', id: a0, data: { num: '7' } }] } as never)
+    check('KI darf Gesperrtes ändern', doc().atoms[a0].num === '7')
+    unlockEverything()
+    check('nach Entsperren änderbar', commit((d) => void (d.atoms[a0].num = '2')) && doc().atoms[a0].num === '2')
   })
 
   setState({ sel: emptySelection() })

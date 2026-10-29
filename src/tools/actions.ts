@@ -126,7 +126,7 @@ export function ungroupSelection() {
   commit((d) => void removeGroups(d, sel))
 }
 
-/** ⌘L: Auswahl sperren – danach nicht mehr anklickbar oder verschiebbar */
+/** ⌘L: Auswahl sperren – danach nicht mehr anklickbar, verschiebbar oder veränderbar */
 export function lockSelection() {
   const { doc, sel } = getState()
   if (!selectionSize(sel)) return toast('Erst Objekte auswählen')

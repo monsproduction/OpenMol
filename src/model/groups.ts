@@ -1,5 +1,5 @@
 // Gruppen und gesperrte Objekte. Eine Gruppe (⌘G) wird immer als Ganzes ausgewählt und verschoben; gesperrte Objekte
-// lassen sich nicht anklicken, verschieben oder radieren, bis man sie entsperrt. Moleküle zählen dabei immer ganz
+// lassen sich nicht anklicken, verschieben, radieren oder verändern (auch nichts anbauen), bis man sie entsperrt. Moleküle zählen dabei immer ganz
 // (gespeichert sind einzelne Atome – später angefügte Atome desselben Moleküls gehören automatisch dazu).
 import type { Doc, Id, ObjKind, ObjLists, Selection } from './types'
 import { emptySelection } from './types'
@@ -80,6 +80,30 @@ export function withGroups(d: Doc, sel: Selection): Selection {
 
 export function isLocked(d: Doc, k: ObjKind, id: Id): boolean {
   return !!d.locked && index(d).locked.has(key(k, id))
+}
+
+/**
+ * Würde die Änderung before → after etwas Gesperrtes verändern? Gesperrte Objekte müssen unverändert bleiben, an
+ * gesperrte Moleküle darf nichts angebaut werden (auch keine Bindung zwischen zwei gesperrten), und auf gesperrte Ringe
+ * kommt keine neue Ringfüllung.
+ */
+export function touchesLocked(before: Doc, after: Doc): boolean {
+  if (!before.locked || before === after) return false
+  const was = wholeMolecules(before, before.locked)
+  for (const k of KINDS)
+    for (const id of was[k]) {
+      const a = before[k]?.[id]
+      const b = after[k]?.[id]
+      if (a !== b && JSON.stringify(a) !== JSON.stringify(b)) return true
+    }
+  const now = wholeMolecules(after, before.locked)
+  if (now.atoms.length > was.atoms.length || now.bonds.length > was.bonds.length) return true
+  if (after.fills !== before.fills && was.atoms.length) {
+    const locked = new Set(was.atoms)
+    for (const f of Object.values(after.fills ?? {}))
+      if (!before.fills?.[f.id] && f.rings.some((r) => r.length && r.every((id) => locked.has(id)))) return true
+  }
+  return false
 }
 
 /** gesperrte Objekte aus einer Auswahl entfernen */

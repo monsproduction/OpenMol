@@ -1277,7 +1277,7 @@ function ArrangeBar() {
           <Icon name="group" size={18} />
         </button>
       )}
-      <button className="icon-btn" data-tip="Sperren (⌘L): nicht mehr anklickbar oder verschiebbar" onClick={lockSelection}>
+      <button className="icon-btn" data-tip="Sperren (⌘L): nicht mehr anklickbar, verschiebbar oder veränderbar" onClick={lockSelection}>
         <Icon name="lock" size={18} />
       </button>
       {locked && (
